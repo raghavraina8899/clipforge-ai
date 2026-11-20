@@ -89,7 +89,7 @@ export interface ClipSettings {
 }
 export interface Project {
   id: string; name: string; source_type: string; source_url: string; status: string; stage: string; progress: number; error: string | null; language: string | null;
-  meta: any; analysis: any; prefs: any; created_at: number; has_video: boolean; proxy_url: string; thumb_url: string; clip_count?: number; export_count?: number;
+  meta: any; analysis: any; prefs: any; created_at: number; has_video: boolean; can_render: boolean; yt_authorized: boolean; proxy_url: string; thumb_url: string; clip_count?: number; export_count?: number;
 }
 export interface Word { w: string; s: number; e: number; i: number }
 export interface Preset { id: string; name: string; style: CaptionStyle & Record<string, any> }

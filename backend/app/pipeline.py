@@ -1,6 +1,7 @@
 """Orchestration: ingest -> transcribe -> analyze -> clips; rendering; thumbnails; helpers shared by the API."""
 import copy
 import json
+import shutil
 import logging
 import re
 import time
@@ -154,21 +155,57 @@ def render_job(clip_id: str, settings_override: Optional[dict] = None):
     def fn(ctx: JobCtx):
         clip = db.one("SELECT * FROM clips WHERE id=?", (clip_id,))
         proj = db.one("SELECT * FROM projects WHERE id=?", (clip["project_id"],))
-        if not proj.get("video_path") or not Path(proj["video_path"]).exists():
+        has_video = bool(proj.get("video_path")) and Path(proj["video_path"]).exists()
+        segment_mode = not has_video and (proj.get("meta") or {}).get("yt_authorized") and proj.get("source_url")
+        if not has_video and not segment_mode:
             raise RuntimeError("The original video file is not attached to this project, so it cannot be rendered. Attach your video file first.")
         P = paths(proj["id"])
         st = clip_settings(clip)
         if settings_override:
             st = settings_store._merge(st, settings_override)
-        words = clip_words(proj["id"], clip["start"], clip["end"])
         P["exports"].mkdir(exist_ok=True)
         stamp = time.strftime("%Y%m%d-%H%M%S")
         safe = re.sub(r"[^A-Za-z0-9]+", "-", clip["title"])[:40].strip("-") or "clip"
         out = P["exports"] / f"{clip['idx'] + 1:02d}-{safe}-{clip_id[:4]}-{stamp}.mp4"
-        meta = proj["meta"]
-        info = render.render_clip(Path(proj["video_path"]), meta, P["proxy"] if P["proxy"].exists() else None, clip, st, words, out,
-                                  P["work"] / clip_id, ctx, lambda p, m: ctx.update("Rendering clip", p, m))
-        rel_words = [{"w": w["w"], "s": w["s"] - clip["start"], "e": w["e"] - clip["start"]} for w in words]
+        work = P["work"] / clip_id
+        seg_file: Optional[Path] = None
+        try:
+            if segment_mode:
+                from .services import ytdl
+                pad = 2.0
+                seg_start = max(0.0, clip["start"] - pad)
+                seg_end = clip["end"] + pad
+                ctx.update("Downloading this clip's segment", 1, "Fetching only the selected time range (temporary, deleted after rendering)")
+                try:
+                    seg_file = ytdl.download_segment(proj["source_url"], seg_start, seg_end, work / "download", "segment",
+                                                     lambda p: ctx.update("Downloading this clip's segment", 1 + p * 0.19, f"Downloading {p:.0f}%"), lambda: ctx.cancelled.is_set())
+                except ytdl.DownloadError as e:
+                    raise RuntimeError(str(e))
+                ctx.update("Reading segment", 20)
+                src = ffmpeg.probe(seg_file)
+                if not src["has_audio"]:
+                    raise RuntimeError("The downloaded segment has no audio.")
+                ctx.update("Transcribing this clip", 22, "Exact word timing from the real audio")
+                audio = work / "audio.wav"
+                ffmpeg.extract_audio(seg_file, audio)
+                tr = transcribe.transcribe(audio, work / "transcript.json", settings_store.load()["transcription"]["model"],
+                                           (proj.get("prefs") or {}).get("language") or "auto", src["duration"],
+                                           lambda p, m: ctx.update("Transcribing this clip", 22 + p * 0.18, m))
+                # times relative to the segment; the clip starts `clip.start - seg_start` into it
+                off = clip["start"] - seg_start
+                c2 = {**clip, "start": off, "end": min(off + (clip["end"] - clip["start"]), src["duration"])}
+                words = [w for w in tr["words"] if w["e"] > c2["start"] and w["s"] < c2["end"]]
+                info = render.render_clip(seg_file, src, None, c2, st, words, out, work, ctx,
+                                          lambda p, m: ctx.update("Rendering clip", 40 + p * 0.6, m))
+                rel_words = [{"w": w["w"], "s": w["s"] - c2["start"], "e": w["e"] - c2["start"]} for w in words]
+                info["notes"] = ["Source segment was downloaded temporarily and deleted after rendering."] + info["notes"]
+            else:
+                words = clip_words(proj["id"], clip["start"], clip["end"])
+                info = render.render_clip(Path(proj["video_path"]), proj["meta"], P["proxy"] if P["proxy"].exists() else None, clip, st, words, out,
+                                          work, ctx, lambda p, m: ctx.update("Rendering clip", p, m))
+                rel_words = [{"w": w["w"], "s": w["s"] - clip["start"], "e": w["e"] - clip["start"]} for w in words]
+        finally:
+            shutil.rmtree(work, ignore_errors=True)  # temp download + render scratch files; exports are kept
         srt = out.with_suffix(".srt")
         from .services import captions
         srt.write_text(captions.build_srt(rel_words), encoding="utf-8")

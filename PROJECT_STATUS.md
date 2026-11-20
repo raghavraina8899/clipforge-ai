@@ -1,6 +1,6 @@
 # ClipForge AI — Project Status
 
-_Last updated: 2026-11-19_
+_Last updated: 2026-11-20_
 
 ## What we are building
 A free, local AI video clipper: video in → transcript → best moments → vertical clips with animated word-timed captions → watermark-free MP4 export. No paid services; Gemini is optional with the user's own key.
@@ -21,7 +21,13 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 - Gemini key handling (masked, chmod 600, header-only, not logged); AI output validation + fallback tested with simulated responses
 - UI pages: Dashboard, Create, Projects, project workspace/editor, Library, Subtitle Styles, AI Settings, Video Settings, About — browser-tested with Playwright
 
+## Added 2026-11-20: URL-only automatic clips
+- YouTube tab has an ownership/permission checkbox. When ticked: moments are found from captions (or temporary audio download if none), and on render only that clip's time range is downloaded with yt-dlp, transcribed, rendered, then deleted (`services/ytdl.py`, `pipeline.render_job` segment mode).
+- Tested: the segment → transcribe → render → delete logic, with the download step replaced by a local file cut. **Not tested: the real yt-dlp download from YouTube** (needs a video the owner may use; yt-dlp on Python 3.9 is pinned to an older release).
+- Known limits: no live preview/thumbnail frames for URL-only projects (video isn't kept).
+
 ## Not yet verified / known gaps
+- Real YouTube segment/audio download end to end
 - Gemini with a real key and Ollama with a real model (only simulated)
 - Hindi transcription accuracy and Devanagari caption rendering on real Hindi audio
 - Active-speaker switching on real speech (only static two-face test)

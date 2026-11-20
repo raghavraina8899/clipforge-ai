@@ -101,20 +101,26 @@ function YouTubePane(c: Common) {
   const [u, setU] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [ok, setOk] = useState(false);
   const valid = YT.test(u);
   const go = async () => {
     if (!durOk(c)) { setErr("Clip length must be at least 5 s, with max above min and at most 180 s."); return; }
     setBusy(true); setErr("");
-    try { const r = await api<{ project_id: string }>("/projects/youtube", { body: { url: u, language: c.lang, min_dur: c.dur.min, max_dur: c.dur.max } }); router.push(`/projects/${r.project_id}`); }
+    try { const r = await api<{ project_id: string }>("/projects/youtube", { body: { url: u, language: c.lang, min_dur: c.dur.min, max_dur: c.dur.max, authorized: ok } }); router.push(`/projects/${r.project_id}`); }
     catch (e: any) { setErr(e.message); setBusy(false); }
   };
   return (
     <div className="space-y-4">
       <div><Label>YouTube video URL</Label><Input placeholder="https://www.youtube.com/watch?v=…" value={u} onChange={(e) => setU(e.target.value)} />
         {u && !valid && <p className="mt-1 text-xs text-warning">This does not look like a YouTube video link.</p>}</div>
-      <Notice kind="info"><b>What this does:</b> reads the title, thumbnail and public captions, then suggests clip moments from the transcript. ClipForge does <b>not</b> download YouTube videos. To render clips, you attach the video file you own (e.g. exported from YouTube Studio) afterwards.</Notice>
+      <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={ok} onChange={(e) => setOk(e.target.checked)} />I own this video or have permission to use it. ClipForge may download it temporarily to create clips.</label>
+      {ok ? (
+        <Notice kind="info"><b>Fully automatic:</b> ClipForge finds the best moments, then downloads <b>only each clip’s time range</b> when you render, transcribes it, adds captions and exports the video clip. The temporary download is deleted right after. Public videos only: no logins, no DRM bypass. Downloading videos you don’t own may break YouTube’s terms.</Notice>
+      ) : (
+        <Notice kind="warn"><b>Text suggestions only:</b> without the confirmation above, ClipForge reads just the title and public captions and suggests moments as text. To get actual video clips, tick the box or upload the video file instead.</Notice>
+      )}
       {err && <Notice kind="error">{err}</Notice>}
-      <Button size="lg" className="w-full" disabled={!valid || busy} onClick={go}>{busy ? "Checking…" : "Check video and analyze captions"}</Button>
+      <Button size="lg" className="w-full" disabled={!valid || busy} onClick={go}>{busy ? "Checking…" : ok ? "Analyze and create video clips" : "Analyze captions (text only)"}</Button>
     </div>
   );
 }

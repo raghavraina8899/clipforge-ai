@@ -39,7 +39,8 @@ export function ClipEditor({ project, clip, fonts, patch, refresh }: { project: 
       <div className="xl:sticky xl:top-6 xl:self-start">
         {project.has_video && project.proxy_url ? (
           <ClipPreview src={url(project.proxy_url)} srcW={project.meta.width} srcH={project.meta.height} start={clip.start} end={clip.end} settings={st} words={words} framing={framing} onTime={onTime} seekTo={seek} />
-        ) : <Notice kind="warn">No video file is attached to this project, so there is nothing to preview.</Notice>}
+        ) : project.can_render ? <Notice kind="info">The video for this clip is downloaded only when you render it, so there is no live preview. Caption styling is shown in Subtitle Styles; the exported clip is the real result.</Notice>
+          : <Notice kind="warn">No video file is attached to this project, so there is nothing to preview.</Notice>}
         {framingBusy && <p className="mt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />Detecting faces for smart framing…</p>}
         {framing && !framingBusy && <p className="mt-2 text-center text-xs text-muted-foreground">{framing.note}</p>}
       </div>
@@ -63,7 +64,7 @@ export function ClipEditor({ project, clip, fonts, patch, refresh }: { project: 
           {tab === "hook" && <HookTab clip={clip} set={set} />}
           {tab === "social" && <SocialPanel clip={clip} onChange={() => refresh()} />}
           {tab === "thumb" && <ThumbnailEditor clip={clip} fonts={fonts} hasVideo={project.has_video} />}
-          {tab === "export" && <ExportPanel clip={clip} hasVideo={project.has_video} onUpdate={refresh} onRefresh={refresh} onSettings={set} />}
+          {tab === "export" && <ExportPanel clip={clip} hasVideo={project.can_render} onUpdate={refresh} onRefresh={refresh} onSettings={set} />}
         </Card>
       </div>
     </div>

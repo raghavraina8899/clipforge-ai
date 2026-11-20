@@ -44,6 +44,8 @@ def view_project(p: dict) -> dict:
     p["proxy_url"] = pipeline.media_url(p["id"], P["proxy"])
     p["thumb_url"] = pipeline.media_url(p["id"], P["thumb"]) if P["thumb"].exists() else ""
     p["has_video"] = bool(p.get("video_path")) and Path(p["video_path"]).exists()
+    p["yt_authorized"] = bool((p.get("meta") or {}).get("yt_authorized"))
+    p["can_render"] = p["has_video"] or (p["yt_authorized"] and bool(p.get("source_url")))
     p.pop("video_path", None)
     p.pop("proxy_path", None)
     p.pop("thumb_path", None)
@@ -259,6 +261,7 @@ async def attach_video(pid: str, request: Request, filename: str):
 class YT(BaseModel):
     url: str
     language: str = "auto"
+    authorized: bool = False  # user confirms they own the video / have permission: enables temporary segment download for rendering
     min_dur: Optional[float] = None
     max_dur: Optional[float] = None
 
@@ -271,7 +274,7 @@ def add_youtube(b: YT):
         err(400, str(e))
     prefs = {k: v for k, v in (("min_dur", b.min_dur), ("max_dur", b.max_dur)) if v}
     pid = new_project(info["title"] or f"YouTube {info['video_id']}", "youtube", source_url=b.url, status="processing",
-                      meta={"title": info["title"], "author": info["author"], "video_id": info["video_id"], "warning": info.get("warning", "")}, prefs=prefs)
+                      meta={"title": info["title"], "author": info["author"], "video_id": info["video_id"], "warning": info.get("warning", ""), "yt_authorized": bool(b.authorized)}, prefs=prefs)
 
     def fn(ctx):
         P = pipeline.paths(pid)
@@ -286,6 +289,34 @@ def add_youtube(b: YT):
         ctx.update("Fetching public captions", 35)
         t = sources.youtube_transcript(info["video_id"])
         meta = db.one("SELECT meta FROM projects WHERE id=?", (pid,))["meta"]
+        if not t["ok"] and b.authorized:
+            # no public captions: fetch audio only (temporary), transcribe locally, then delete it
+            from ..services import transcribe, ytdl
+            ctx.update("Downloading audio for analysis", 40, f"{t['reason']} Fetching audio only (temporary).")
+            work = P["dir"] / "tmp_audio"
+            try:
+                af = ytdl.download_audio(b.url, work, lambda p: ctx.update("Downloading audio for analysis", 40 + p * 0.15, f"Downloading audio {p:.0f}%"), lambda: ctx.cancelled.is_set())
+                wav = work / "audio.wav"
+                ffmpeg.run(["-i", af, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav])
+                dur = ffmpeg.probe(af)["duration"] if af.suffix != ".wav" else 0
+                ctx.update("Transcribing speech", 55)
+                tr = transcribe.transcribe(wav, P["transcript"], settings_store.load()["transcription"]["model"],
+                                           (db.one("SELECT prefs FROM projects WHERE id=?", (pid,))["prefs"] or {}).get("language") or "auto", dur,
+                                           lambda p, m_: ctx.update("Transcribing speech", 55 + p * 0.3, m_))
+            except ytdl.DownloadError as e:
+                db.update("projects", pid, status="error", error=str(e))
+                raise RuntimeError(str(e))
+            finally:
+                shutil.rmtree(work, ignore_errors=True)
+            meta["duration"] = round(dur, 1)
+            db.update("projects", pid, meta=meta)
+            if not tr["words"]:
+                db.update("projects", pid, status="ready", analysis={"summary": "", "engine": "builtin", "clips": 0, "note": "No speech was detected.", "access": {"transcript": True, "reason": ""}})
+                return {"transcript": True}
+            pipeline.run_analysis(pid, ctx, 88, 100)
+            db.update("projects", pid, status="ready", language=tr["language"],
+                      analysis={**db.one("SELECT analysis FROM projects WHERE id=?", (pid,))["analysis"], "access": {"transcript": True, "reason": ""}})
+            return {"transcript": True, "source": "audio"}
         if not t["ok"]:
             db.update("projects", pid, status="needs_video",
                       analysis={"summary": "", "engine": "builtin", "clips": 0, "note": "", "access": {"transcript": False, "reason": t["reason"]}},
@@ -296,11 +327,11 @@ def add_youtube(b: YT):
         meta["duration"] = round(t["segments"][-1]["end"], 1) if t["segments"] else 0
         db.update("projects", pid, meta=meta)
         pipeline.run_analysis(pid, ctx, 55, 100)
-        db.update("projects", pid, status="needs_video", language=t["language"][:2],
+        db.update("projects", pid, status="ready" if b.authorized else "needs_video", language=t["language"][:2],
                   analysis={**db.one("SELECT analysis FROM projects WHERE id=?", (pid,))["analysis"], "access": {"transcript": True, "reason": ""}})
         return {"transcript": True}
     return {"project_id": pid, "job_id": jobs.submit("analyze", fn, project_id=pid), "info": info,
-            "access": "ClipForge reads YouTube metadata and public captions only. It does not download YouTube videos: to render clips, attach the video file you own or have permission to use."}
+            "access": ("You confirmed you may use this video: ClipForge will download only each clip's time range when you render it, then delete it." if b.authorized else "Without confirming you own this video, ClipForge reads metadata and public captions only (text suggestions). Confirm permission or upload the file to render video clips.")}
 
 
 class Live(BaseModel):
@@ -308,6 +339,17 @@ class Live(BaseModel):
     name: str = ""
     authorized: bool = False
     language: str = "auto"
+
+
+@router.post("/projects/{pid}/authorize-download")
+def authorize_download(pid: str, body: dict):
+    p = get_project(pid)
+    if p["source_type"] != "youtube":
+        err(400, "Only YouTube projects use this.")
+    if not body.get("authorized"):
+        err(400, "Please confirm that you own this video or have permission to use it.")
+    db.update("projects", pid, meta={**(p.get("meta") or {}), "yt_authorized": True})
+    return {"ok": True}
 
 
 @router.post("/projects/live")
