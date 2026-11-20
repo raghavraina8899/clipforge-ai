@@ -5,6 +5,7 @@ import { Film, Scissors, Download, FolderKanban, Plus, Loader2 } from "lucide-re
 import { api, url, Job, Project } from "@/lib/api";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Notice, PageHeader, Progress } from "@/components/ui";
 import { fmtTime, timeAgo } from "@/lib/utils";
+import { Counter, TiltCard } from "@/components/fx";
 import { StatusBadge } from "@/components/status-badge";
 
 interface Stats { videos: number; projects: number; clips: number; exports: number; recent_projects: Project[]; recent_exports: any[]; active_jobs: Job[] }
@@ -22,10 +23,10 @@ export default function Dashboard() {
     return () => { stop = true; };
   }, []);
   const stat = (icon: React.ReactNode, label: string, v: number | undefined) => (
-    <Card><CardContent className="flex items-center gap-4 p-5">
-      <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/15 text-primary">{icon}</div>
-      <div><div className="text-2xl font-semibold tabular-nums">{v ?? "–"}</div><div className="text-xs text-muted-foreground">{label}</div></div>
-    </CardContent></Card>
+    <TiltCard><div className="flex items-center gap-4 p-5">
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/30 to-cyan/20 text-cyan shadow-[inset_0_1px_0_hsl(0_0%_100%/.15),0_8px_18px_-8px_hsl(211_100%_55%/.7)]">{icon}</div>
+      <div><div className="text-3xl font-semibold tabular-nums tracking-tight"><Counter value={v} /></div><div className="text-xs text-muted-foreground">{label}</div></div>
+    </div></TiltCard>
   );
   return (
     <div>

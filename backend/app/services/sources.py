@@ -107,7 +107,7 @@ def validate_stream_url(url: str) -> str:
         raise ValueError("Unsupported stream address. Use a direct stream URL such as an HLS (.m3u8) link, RTMP, RTSP or SRT address.")
     host = (u.hostname or "").lower()
     if any(host == b or host.endswith("." + b) for b in BLOCKED_HOSTS):
-        raise ValueError("That is a web page address, not a direct stream. ClipForge only records direct stream URLs you are authorized to use "
+        raise ValueError("That is a web page address, not a direct stream. Frameflow only records direct stream URLs you are authorized to use "
                          "(your own server, OBS/RTMP output, a camera). It does not extract streams from platform pages or bypass DRM / login.")
     return url.strip()
 

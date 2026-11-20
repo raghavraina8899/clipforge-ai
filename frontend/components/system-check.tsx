@@ -28,7 +28,7 @@ export function SystemCheck() {
         {err && <p className="text-sm text-danger">{err}</p>}
         {checks && (
           <>
-            <p className={`text-sm font-medium ${bad ? "text-danger" : "text-success"}`}>{bad ? `${bad} problem(s) need fixing before ClipForge works.` : "Everything essential looks fine."}</p>
+            <p className={`text-sm font-medium ${bad ? "text-danger" : "text-success"}`}>{bad ? `${bad} problem(s) need fixing before Frameflow works.` : "Everything essential looks fine."}</p>
             <ul className="space-y-2">
               {checks.map((c) => (
                 <li key={c.id} className="flex items-start gap-2 text-sm">{icon(c.level)}<div className="min-w-0"><div>{c.name} <span className="text-muted-foreground">· {c.detail}</span></div>{c.fix && <div className="text-xs text-warning">→ {c.fix}</div>}</div></li>

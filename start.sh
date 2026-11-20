@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# ClipForge AI - one command to set up (first run) and start everything:  ./start.sh
+# Frameflow - one command to set up (first run) and start everything:  ./start.sh
 set -euo pipefail
 cd "$(dirname "$0")"
-say() { printf "\033[1;35m[clipforge]\033[0m %s\n" "$*"; }
-die() { printf "\033[1;31m[clipforge] %s\033[0m\n" "$*" >&2; exit 1; }
+say() { printf "\033[1;35m[frameflow]\033[0m %s\n" "$*"; }
+die() { printf "\033[1;31m[frameflow] %s\033[0m\n" "$*" >&2; exit 1; }
 
 # prefer a recent Python: current yt-dlp (YouTube downloads) needs 3.10+
 PY=""
@@ -51,7 +51,7 @@ if [ "${CLIPFORGE_DEV:-0}" = "1" ]; then FRONT="npm run dev"; else
 fi
 cd ..
 
-for port in 8000 3000; do lsof -ti tcp:$port -sTCP:LISTEN >/dev/null 2>&1 && die "Port $port is already in use. Stop the other program (or an earlier ClipForge) first."; done
+for port in 8000 3000; do lsof -ti tcp:$port -sTCP:LISTEN >/dev/null 2>&1 && die "Port $port is already in use. Stop the other program (or an earlier Frameflow) first."; done
 
 pids=()
 cleanup() { say "Stopping…"; for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done; wait 2>/dev/null || true; }

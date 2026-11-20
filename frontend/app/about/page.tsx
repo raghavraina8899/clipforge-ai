@@ -6,7 +6,7 @@ const Item = ({ t, children }: { t: string; children: React.ReactNode }) => <li>
 export default function About() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader title="About ClipForge AI" subtitle="A free, local tool that turns long videos into Shorts and Reels with word-timed captions. No watermark, no subscription, no cloud." />
+      <PageHeader title="About Frameflow" subtitle="A free, local tool that turns long videos into Shorts and Reels with word-timed captions. No watermark, no subscription, no cloud." />
       <SystemCheck />
       <Card><CardHeader><CardTitle>What runs where</CardTitle></CardHeader><CardContent><ul className="space-y-2 text-sm">
         <Item t="FFmpeg">renders every export (layout, enhancement, burned-in captions, H.264/H.265).</Item>
@@ -16,7 +16,7 @@ export default function About() {
         <Item t="Gemini / Ollama (optional)">improve ranking and copy. Gemini uses your own key and its free tier has rate limits that Google sets and may change.</Item>
         <Item t="SQLite + local files">store projects in the <code>data/</code> folder next to the app.</Item></ul></CardContent></Card>
       <Card><CardHeader><CardTitle>Honest limits</CardTitle></CardHeader><CardContent><ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-        <li>YouTube URLs: ClipForge reads public metadata and captions only. It does not download YouTube videos; attach the file you own to render clips.</li>
+        <li>YouTube URLs: Frameflow reads public metadata and captions only. It does not download YouTube videos; attach the file you own to render clips.</li>
         <li>Live streams: only direct stream addresses you are authorized to use. No DRM or login bypass. Pausing stops capture.</li>
         <li>The viral score estimates how well a clip is constructed. It does not predict or guarantee performance.</li>
         <li>Face tracking uses a classic OpenCV detector: front-facing faces work best; otherwise it falls back to center framing and says so.</li>

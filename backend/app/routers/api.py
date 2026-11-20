@@ -87,6 +87,21 @@ def system():
             "fonts": [f for f in FONTS_DIR.glob("*.ttf")].__len__()}
 
 
+@router.get("/storage")
+def storage_list():
+    from .. import storage
+    return storage.summary()
+
+
+@router.post("/storage/delete")
+def storage_delete(body: dict):
+    from .. import storage
+    ids = [str(i) for i in (body.get("ids") or [])]
+    if not ids:
+        err(400, "Nothing selected.")
+    return storage.delete(ids)
+
+
 @router.get("/doctor")
 def doctor_checks(network: int = 1):
     from .. import doctor
@@ -410,7 +425,7 @@ def add_youtube(b: YT):
 
     fn = youtube_job(pid, info, b.url, bool(b.authorized))
     return {"project_id": pid, "job_id": jobs.submit("analyze", fn, project_id=pid), "info": info,
-            "access": ("You confirmed you may use this video: ClipForge will download only each clip's time range when you render it, then delete it." if b.authorized else "Without confirming you own this video, ClipForge reads metadata and public captions only (text suggestions). Confirm permission or upload the file to render video clips.")}
+            "access": ("You confirmed you may use this video: Frameflow will download only each clip's time range when you render it, then delete it." if b.authorized else "Without confirming you own this video, Frameflow reads metadata and public captions only (text suggestions). Confirm permission or upload the file to render video clips.")}
 
 
 class Live(BaseModel):

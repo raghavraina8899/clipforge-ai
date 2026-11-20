@@ -6,6 +6,7 @@ import { api, url, Project } from "@/lib/api";
 import { Button, Card, Input, Notice, PageHeader } from "@/components/ui";
 import { StatusBadge } from "@/components/status-badge";
 import { fmtTime, timeAgo } from "@/lib/utils";
+import { TiltCard } from "@/components/fx";
 
 export default function Projects() {
   const [list, setList] = useState<Project[] | null>(null);
@@ -27,7 +28,7 @@ export default function Projects() {
       {list && !list.length && <Card className="p-10 text-center text-sm text-muted-foreground">No projects yet.</Card>}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {list?.map((p) => (
-          <Card key={p.id} className="overflow-hidden">
+          <TiltCard key={p.id} strength={5}><div className="overflow-hidden">
             <Link href={`/projects/${p.id}`}>
               <div className="aspect-video bg-muted">{p.thumb_url && <img src={url(p.thumb_url)} alt="" className="h-full w-full object-cover" />}</div>
             </Link>
@@ -48,7 +49,7 @@ export default function Projects() {
               </div>
               <div className="text-xs text-muted-foreground">{p.source_type === "youtube" ? "YouTube" : p.source_type === "live" ? "Live recording" : "Upload"} · {timeAgo(p.created_at)}</div>
             </div>
-          </Card>
+          </div></TiltCard>
         ))}
       </div>
     </div>

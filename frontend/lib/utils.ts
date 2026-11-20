@@ -15,6 +15,7 @@ export function parseTime(s: string): number | null {
   return parts.reduce((acc, p) => acc * 60 + p, 0);
 }
 export function fmtBytes(n: number): string {
+  if (n <= 0) return "0 KB";
   if (n > 1e9) return (n / 1e9).toFixed(2) + " GB";
   if (n > 1e6) return (n / 1e6).toFixed(1) + " MB";
   return Math.max(1, Math.round(n / 1e3)) + " KB";

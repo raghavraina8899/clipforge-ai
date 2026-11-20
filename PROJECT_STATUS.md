@@ -1,4 +1,4 @@
-# ClipForge AI — Project Status
+# Frameflow — Project Status
 
 _Last updated: 2026-11-20_
 
@@ -39,6 +39,11 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 - Captions: Hinglish language option + convert button, show/hide captions, hide captions for chosen time ranges (preview, export, SRT).
 - Data moved out of iCloud (see above).
 
+## Added 2026-11-20: storage manager, rename, redesign
+- App renamed Frameflow (data folder migrates automatically from the old name). New look: deep slate + electric blue/cyan, glass surfaces, 3D tilt cards, animated counters.
+- Storage page lists everything on disk per project (source, preview copy, temp clips, exports, whole project), leftovers, logs, uploaded audio and speech models with sizes; select / select all / safe-only and delete.
+- System check (About page, `./doctor.sh`) + copyable diagnostic report; cancel now kills frozen downloads; audio-only analysis downloads the whole audio then cuts the range.
+
 ## Not yet verified / known gaps
 - Real YouTube segment/audio download end to end
 - Gemini with a real key and Ollama with a real model (only simulated)
@@ -50,4 +55,4 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 
 ## Notes
 - Servers are stopped after testing; start with `./start.sh`.
-- Data lives outside the repo: `~/Library/Application Support/ClipForge` (macOS) so iCloud does not sync it; venv/node_modules/build use `.nosync` folders. Fonts are downloaded by `scripts/fetch_fonts.sh`.
+- Data lives outside the repo: `~/Library/Application Support/Frameflow` (macOS) so iCloud does not sync it; venv/node_modules/build use `.nosync` folders. Fonts are downloaded by `scripts/fetch_fonts.sh`.

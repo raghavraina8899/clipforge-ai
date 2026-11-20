@@ -233,7 +233,7 @@ function HookTab({ clip, set }: { clip: Clip; set: (p: any) => void }) {
         <div><Label>Ending text</Label><Input value={e.text} placeholder="Follow for more" onChange={(ev) => set({ ending: { text: ev.target.value } })} /></div>
         <Slider label="Visible for" value={e.duration} min={1} max={4} step={0.1} suffix=" s" onChange={(v) => set({ ending: { duration: v } })} />
       </div>
-      <Notice kind="info">Hook and ending text is an overlay only. ClipForge never reorders, cuts or alters what the speaker says, so edits cannot change their meaning. Keep hooks truthful to the clip.</Notice>
+      <Notice kind="info">Hook and ending text is an overlay only. Frameflow never reorders, cuts or alters what the speaker says, so edits cannot change their meaning. Keep hooks truthful to the clip.</Notice>
     </div>
   );
 }

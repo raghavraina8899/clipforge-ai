@@ -4,15 +4,15 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:pointer-events-none disabled:opacity-50 active:translate-y-px",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        secondary: "bg-muted text-foreground hover:bg-muted/70",
-        outline: "border border-input bg-transparent hover:bg-accent",
+        default: "text-white bg-gradient-to-b from-[hsl(211_100%_64%)] to-[hsl(215_100%_50%)] shadow-[inset_0_1px_0_hsl(0_0%_100%/.28),0_8px_18px_-8px_hsl(211_100%_55%/.8)] hover:-translate-y-px hover:brightness-110 hover:shadow-[inset_0_1px_0_hsl(0_0%_100%/.3),0_12px_24px_-8px_hsl(211_100%_55%)]",
+        secondary: "text-foreground bg-gradient-to-b from-[hsl(225_21%_21%)] to-[hsl(225_22%_15%)] border border-white/[0.06] shadow-[inset_0_1px_0_hsl(0_0%_100%/.07),0_6px_14px_-8px_hsl(0_0%_0%/.8)] hover:-translate-y-px hover:border-primary/40",
+        outline: "border border-input bg-card/40 backdrop-blur hover:border-primary/50 hover:bg-accent",
         ghost: "hover:bg-accent",
-        danger: "bg-danger/15 text-danger hover:bg-danger/25",
+        danger: "bg-danger/15 text-danger border border-danger/20 hover:bg-danger/25",
       },
       size: { default: "h-9 px-4", sm: "h-8 px-3 text-xs", lg: "h-11 px-6 text-base", icon: "h-8 w-8" },
     },
@@ -26,23 +26,23 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ classN
 Button.displayName = "Button";
 
 export const Card = ({ className, ...p }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("rounded-lg border bg-card", className)} {...p} />
+  <div className={cn("surface rounded-xl", className)} {...p} />
 );
 export const CardHeader = ({ className, ...p }: React.HTMLAttributes<HTMLDivElement>) => <div className={cn("flex flex-col gap-1 p-4 pb-2", className)} {...p} />;
 export const CardTitle = ({ className, ...p }: React.HTMLAttributes<HTMLHeadingElement>) => <h3 className={cn("text-sm font-semibold", className)} {...p} />;
 export const CardContent = ({ className, ...p }: React.HTMLAttributes<HTMLDivElement>) => <div className={cn("p-4 pt-2", className)} {...p} />;
 
 export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(({ className, ...p }, ref) => (
-  <input ref={ref} className={cn("h-9 w-full rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:opacity-50", className)} {...p} />
+  <input ref={ref} className={cn("h-9 w-full rounded-md border border-input bg-background/70 px-3 text-sm shadow-[inset_0_1px_2px_hsl(0_0%_0%/.4)] placeholder:text-muted-foreground transition focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50", className)} {...p} />
 ));
 Input.displayName = "Input";
 export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...p }, ref) => (
-  <textarea ref={ref} className={cn("w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60", className)} {...p} />
+  <textarea ref={ref} className={cn("w-full rounded-md border border-input bg-background/70 px-3 py-2 text-sm shadow-[inset_0_1px_2px_hsl(0_0%_0%/.4)] placeholder:text-muted-foreground focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", className)} {...p} />
 ));
 Textarea.displayName = "Textarea";
 
 export const Select = ({ className, ...p }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
-  <select className={cn("h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60", className)} {...p} />
+  <select className={cn("h-9 w-full rounded-md border border-input bg-background/70 px-2 text-sm shadow-[inset_0_1px_2px_hsl(0_0%_0%/.4)] focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40", className)} {...p} />
 );
 
 export const Label = ({ className, ...p }: React.LabelHTMLAttributes<HTMLLabelElement>) => <label className={cn("mb-1 block text-xs font-medium text-muted-foreground", className)} {...p} />;
@@ -55,7 +55,9 @@ export const Badge = ({ className, variant, ...p }: React.HTMLAttributes<HTMLSpa
 
 export const Progress = ({ value, className }: { value: number; className?: string }) => (
   <div className={cn("h-2 w-full overflow-hidden rounded-full bg-muted", className)} role="progressbar" aria-valuenow={Math.round(value)}>
-    <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${Math.max(2, Math.min(100, value))}%` }} />
+    <div className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-primary to-cyan shadow-[0_0_14px_hsl(var(--primary)/.6)] transition-all duration-500" style={{ width: `${Math.max(2, Math.min(100, value))}%` }}>
+      <span className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+    </div>
   </div>
 );
 
@@ -63,7 +65,7 @@ export const Switch = ({ checked, onChange, label }: { checked: boolean; onChang
   <label className="flex cursor-pointer items-center justify-between gap-3 text-sm">
     {label && <span>{label}</span>}
     <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
-      className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", checked ? "bg-primary" : "bg-input")}>
+      className={cn("relative h-5 w-9 shrink-0 rounded-full transition-all", checked ? "bg-gradient-to-r from-primary to-cyan shadow-[0_0_12px_hsl(var(--primary)/.55)]" : "bg-input")}>
       <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all", checked ? "left-[18px]" : "left-0.5")} />
     </button>
   </label>
@@ -78,10 +80,10 @@ export const Slider = ({ label, value, min, max, step, onChange, suffix = "" }: 
 
 export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: T; label: string; icon?: React.ReactNode }[]; value: T; onChange: (v: T) => void }) {
   return (
-    <div className="flex flex-wrap gap-1 rounded-md bg-muted p-1">
+    <div className="flex flex-wrap gap-1 rounded-lg border border-white/5 bg-muted/70 p-1 shadow-[inset_0_1px_2px_hsl(0_0%_0%/.4)]">
       {tabs.map((t) => (
         <button key={t.id} onClick={() => onChange(t.id)}
-          className={cn("flex items-center gap-1.5 whitespace-nowrap rounded px-3 py-1.5 text-xs font-medium transition-colors", value === t.id ? "bg-card text-foreground shadow" : "text-muted-foreground hover:text-foreground")}>
+          className={cn("flex items-center gap-1.5 whitespace-nowrap rounded px-3 py-1.5 text-xs font-medium transition-colors", value === t.id ? "bg-gradient-to-b from-[hsl(225_22%_22%)] to-[hsl(225_24%_17%)] text-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/.08),0_4px_10px_-4px_hsl(0_0%_0%/.7)]" : "text-muted-foreground hover:text-foreground")}>
           {t.icon}{t.label}
         </button>
       ))}
@@ -92,7 +94,7 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: React.ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="text-2xl font-semibold tracking-tight">{title}</h1>{subtitle && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{subtitle}</p>}</div>
+      <div><h1 className="text-[1.65rem] font-semibold tracking-tight"><span className="text-gradient">{title}</span></h1>{subtitle && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{subtitle}</p>}</div>
       {actions}
     </div>
   );
@@ -100,7 +102,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 
 export function Notice({ kind = "info", children }: { kind?: "info" | "warn" | "error" | "ok"; children: React.ReactNode }) {
   const c = { info: "border-primary/30 bg-primary/10", warn: "border-warning/30 bg-warning/10", error: "border-danger/30 bg-danger/10", ok: "border-success/30 bg-success/10" }[kind];
-  return <div className={cn("rounded-md border px-3 py-2 text-sm", c)}>{children}</div>;
+  return <div className={cn("rounded-lg border px-3 py-2.5 text-sm shadow-[inset_0_1px_0_hsl(0_0%_100%/.05)]", c)}>{children}</div>;
 }
 
 export function JobBar({ job, onCancel }: { job: { stage: string; progress: number; message: string | null; status: string; error: string | null } | null; onCancel?: () => void }) {

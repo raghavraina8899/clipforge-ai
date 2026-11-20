@@ -18,7 +18,7 @@ class MediaError(RuntimeError):
 
 def require() -> None:
     if not FFMPEG or not FFPROBE:
-        raise MediaError("FFmpeg is not installed. Install it (see README) and restart ClipForge.")
+        raise MediaError("FFmpeg is not installed. Install it (see README) and restart Frameflow.")
 
 
 def probe(path: Path) -> dict:

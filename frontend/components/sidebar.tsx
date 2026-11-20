@@ -1,8 +1,10 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Wand2, FolderKanban, Library, Captions, Sparkles, SlidersHorizontal, Info, Scissors } from "lucide-react";
+import { LayoutDashboard, Wand2, FolderKanban, Library, Captions, Sparkles, SlidersHorizontal, Info, HardDrive } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@/lib/brand";
+import { Logo } from "@/components/fx";
 
 const items = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -10,30 +12,35 @@ const items = [
   { href: "/projects", label: "My Projects", icon: FolderKanban },
   { href: "/library", label: "Clip Library", icon: Library },
   { href: "/styles", label: "Subtitle Styles", icon: Captions },
+  { href: "/storage", label: "Storage", icon: HardDrive },
   { href: "/settings/ai", label: "AI Settings", icon: Sparkles },
   { href: "/settings/video", label: "Video Settings", icon: SlidersHorizontal },
-  { href: "/about", label: "About", icon: Info },
+  { href: "/about", label: "About & Help", icon: Info },
 ];
+
+const isActive = (path: string, href: string) => (href === "/" ? path === "/" : path.startsWith(href));
 
 export function Sidebar() {
   const path = usePathname() ?? "";
   return (
-    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-card/50 p-3 md:flex">
-      <Link href="/" className="mb-5 flex items-center gap-2 px-2 py-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Scissors className="h-4 w-4" /></span>
-        <span className="text-base font-semibold tracking-tight">ClipForge <span className="text-primary">AI</span></span>
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/5 bg-card/40 p-4 backdrop-blur-xl md:flex">
+      <Link href="/" className="group mb-7 flex items-center gap-3 px-2 py-2">
+        <span className="transition-transform duration-300 group-hover:rotate-[-6deg] group-hover:scale-110"><Logo /></span>
+        <span className="text-lg font-semibold tracking-tight">{BRAND.name}</span>
       </Link>
-      <nav className="flex flex-1 flex-col gap-0.5">
+      <nav className="flex flex-1 flex-col gap-1">
         {items.map((it) => {
-          const active = it.href === "/" ? path === "/" : path.startsWith(it.href);
+          const active = isActive(path, it.href);
           return (
-            <Link key={it.href} href={it.href} className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors", active ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
-              <it.icon className="h-4 w-4" />{it.label}
+            <Link key={it.href} href={it.href} className={cn("group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200",
+              active ? "bg-gradient-to-r from-primary/20 via-primary/5 to-transparent text-white shadow-[inset_0_1px_0_hsl(0_0%_100%/.06)]" : "text-muted-foreground hover:translate-x-0.5 hover:bg-white/[0.04] hover:text-foreground")}>
+              {active && <span className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r bg-gradient-to-b from-primary to-cyan shadow-[0_0_12px_hsl(var(--primary))]" />}
+              <it.icon className={cn("h-4 w-4 transition-transform duration-200 group-hover:scale-110", active && "text-cyan")} />{it.label}
             </Link>
           );
         })}
       </nav>
-      <p className="px-2 text-[11px] leading-snug text-muted-foreground">Runs locally. No watermark, no subscription.</p>
+      <div className="rounded-lg border border-white/5 bg-white/[0.03] p-3 text-[11px] leading-snug text-muted-foreground">Runs on your computer.<br />No watermark. No subscription.</div>
     </aside>
   );
 }
@@ -41,9 +48,9 @@ export function Sidebar() {
 export function MobileNav() {
   const path = usePathname() ?? "";
   return (
-    <nav className="sticky top-0 z-20 flex gap-1 overflow-x-auto border-b bg-background/95 p-2 backdrop-blur md:hidden">
+    <nav className="sticky top-0 z-20 flex gap-1 overflow-x-auto border-b border-white/5 bg-background/80 p-2 backdrop-blur-xl md:hidden">
       {items.map((it) => (
-        <Link key={it.href} href={it.href} className={cn("flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs", (it.href === "/" ? path === "/" : path.startsWith(it.href)) ? "bg-primary/15 text-primary" : "text-muted-foreground")}>
+        <Link key={it.href} href={it.href} className={cn("flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs", isActive(path, it.href) ? "bg-primary/20 text-white" : "text-muted-foreground")}>
           <it.icon className="h-3.5 w-3.5" />{it.label}
         </Link>
       ))}

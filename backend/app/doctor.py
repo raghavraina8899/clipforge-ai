@@ -1,4 +1,4 @@
-"""System check: finds the usual reasons ClipForge does not work on a machine and says how to fix each one.
+"""System check: finds the usual reasons Frameflow does not work on a machine and says how to fix each one.
 Usable without the server:  backend/.venv/bin/python -m app.doctor"""
 import importlib.metadata as md
 import platform
@@ -100,7 +100,7 @@ def run_checks(network: bool = True) -> list:
 
 
 def report(network: bool = True) -> str:
-    lines = ["ClipForge diagnostic report", "=" * 28,
+    lines = ["Frameflow diagnostic report", "=" * 28,
              f"OS: {platform.platform()}", f"Python: {sys.version.split()[0]}", f"Data folder: {config.DATA_DIR}", ""]
     for c in run_checks(network):
         mark = {"ok": "OK  ", "warn": "WARN", "error": "FAIL"}[c["level"]]
@@ -120,5 +120,5 @@ if __name__ == "__main__":
         if c["fix"]:
             print(f"     → {c['fix']}")
         bad += c["level"] == "error"
-    print("\nEverything essential looks fine." if not bad else f"\n{bad} problem(s) need fixing before ClipForge works.")
+    print("\nEverything essential looks fine." if not bad else f"\n{bad} problem(s) need fixing before Frameflow works.")
     sys.exit(1 if bad else 0)

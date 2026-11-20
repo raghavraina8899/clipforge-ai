@@ -28,7 +28,7 @@ export default function VideoSettings() {
             <div><Label>Codec</Label><Select value={ex.codec} onChange={(e) => upd({ export: { codec: e.target.value } })}><option value="h264">MP4 (H.264)</option><option value="h265">MP4 (H.265)</option></Select></div>
             <div><Label>Quality</Label><Select value={ex.quality} onChange={(e) => upd({ export: { quality: e.target.value } })}><option value="high">High quality</option><option value="balanced">Balanced</option><option value="small">Smaller file</option></Select></div>
           </div>
-          <p className="text-xs text-muted-foreground">ClipForge never invents detail: if the source has fewer pixels or frames than requested, the export says so (1440p / 4K / 60 fps need a source that really has them).</p>
+          <p className="text-xs text-muted-foreground">Frameflow never invents detail: if the source has fewer pixels or frames than requested, the export says so (1440p / 4K / 60 fps need a source that really has them).</p>
         </CardContent></Card>
         <Card><CardHeader><CardTitle>Enhancements</CardTitle></CardHeader><CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">

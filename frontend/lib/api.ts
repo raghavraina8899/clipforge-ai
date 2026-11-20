@@ -23,7 +23,7 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });
   } catch {
-    throw new ApiError("Cannot reach the ClipForge backend. Is it running? (start it with ./start.sh)");
+    throw new ApiError("Cannot reach the Frameflow backend. Is it running? (start it with ./start.sh)");
   }
   return handle(r);
 }
@@ -40,7 +40,7 @@ export function upload<T = any>(path: string, file: File, onProgress: (pct: numb
         xhr.status < 300 ? resolve(j) : reject(new ApiError(typeof j.detail === "string" ? j.detail : "Upload failed"));
       } catch { reject(new ApiError("Upload failed")); }
     };
-    xhr.onerror = () => reject(new ApiError("Cannot reach the ClipForge backend. Is it running?"));
+    xhr.onerror = () => reject(new ApiError("Cannot reach the Frameflow backend. Is it running?"));
     xhr.onabort = () => reject(new ApiError("Upload cancelled"));
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
     xhr.send(file);
