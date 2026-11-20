@@ -10,8 +10,8 @@ Everything runs on your computer: no subscription, no cloud, no paid API require
 Open the **Terminal** app and run these three lines, one at a time:
 
 ```bash
-git clone https://github.com/raghavraina8899/clipforge-ai.git
-cd clipforge-ai
+git clone https://github.com/raghavraina8899/hookhunt.git
+cd hookhunt
 ./setup-mac.sh
 ```
 
@@ -21,7 +21,7 @@ cd clipforge-ai
 **Next time**, just open Terminal and run:
 
 ```bash
-cd clipforge-ai
+cd hookhunt
 ./start.sh
 ```
 
@@ -32,8 +32,8 @@ Leave that Terminal window open while you use the app. Press `Ctrl+C` in it to s
 ### Linux (Ubuntu/Debian)
 ```bash
 sudo apt update && sudo apt install -y git python3 python3-venv nodejs npm ffmpeg curl
-git clone https://github.com/raghavraina8899/clipforge-ai.git
-cd clipforge-ai
+git clone https://github.com/raghavraina8899/hookhunt.git
+cd hookhunt
 ./start.sh
 ```
 (Node 18+ and Python 3.10+ are needed; if `apt` gives older versions use nodejs.org / `deadsnakes`.)
