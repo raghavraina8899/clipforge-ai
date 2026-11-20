@@ -85,7 +85,9 @@ def clean_temp_downloads() -> None:
     import shutil
     from .config import PROJECTS_DIR
     for pdir in PROJECTS_DIR.glob("*"):
-        shutil.rmtree(pdir / "tmp_audio", ignore_errors=True)
+        ta = pdir / "tmp_audio"
+        if ta.exists() and time.time() - ta.stat().st_mtime > 86400:  # keep recent audio so a retry can resume
+            shutil.rmtree(ta, ignore_errors=True)
         shutil.rmtree(pdir / "work", ignore_errors=True)
         for part in (pdir / "preview").glob("*.part*") if (pdir / "preview").exists() else []:
             part.unlink(missing_ok=True)

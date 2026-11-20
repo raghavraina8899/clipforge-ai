@@ -114,3 +114,13 @@ def make_proxy(src: Path, dst: Path, duration: float, ctx=None, on_progress=None
 def extract_frame(src: Path, t: float, dst: Path, width: int = 0) -> None:
     vf = ["-vf", f"scale={width}:-2"] if width else []
     run(["-ss", f"{t:.3f}", "-i", src, "-frames:v", "1", *vf, "-q:v", "2", dst])
+
+
+def audio_duration(path: Path) -> float:
+    """Duration of an audio-only file (probe() insists on a video stream)."""
+    require()
+    r = subprocess.run([FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)], capture_output=True, text=True)
+    try:
+        return float(r.stdout.strip())
+    except ValueError:
+        raise MediaError(f"Could not read the audio file: {r.stderr.strip()[-200:] or 'unknown error'}")

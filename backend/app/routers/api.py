@@ -315,22 +315,30 @@ def youtube_job(pid: str, info: dict, url: str, authorized: bool):
         if not t["ok"] and authorized:
             # no public captions: fetch audio only (temporary), transcribe locally, then delete it
             from ..services import transcribe, ytdl
-            ctx.update("Downloading audio for analysis", 40, f"{t['reason']} Fetching audio only (temporary).")
             work = P["dir"] / "tmp_audio"
+            wav = work / "audio.wav"
             try:
-                af = ytdl.download_audio(url, work, lambda p: ctx.update("Downloading audio for analysis", 40 + p * 0.15, f"Downloading audio {p:.0f}%"), lambda: ctx.cancelled.is_set())
-                wav = work / "audio.wav"
-                ffmpeg.run(["-i", af, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav])
-                dur = ffmpeg.probe(af)["duration"] if af.suffix != ".wav" else 0
-                ctx.update("Transcribing speech", 55)
+                if not wav.exists():  # a retry reuses the finished audio of an earlier attempt (long videos take hours)
+                    ctx.update("Downloading audio for analysis", 40, f"{t['reason']} Fetching audio only (temporary).")
+                    af = ytdl.download_audio(url, work, lambda p: ctx.update("Downloading audio for analysis", 40 + p * 0.1, f"Downloading audio {p:.0f}%"), lambda: ctx.cancelled.is_set())
+                    ctx.update("Preparing audio", 50, "Converting audio for the speech model")
+                    part = work / "audio_part.wav"
+                    ffmpeg.run(["-i", af, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", part])
+                    part.replace(wav)
+                    af.unlink(missing_ok=True)
+                dur = ffmpeg.audio_duration(wav)
+                ctx.update("Transcribing speech", 55, f"Transcribing {dur / 3600:.1f} h of audio locally (roughly 9x faster than real time)")
                 tr = transcribe.transcribe(wav, P["transcript"], settings_store.load()["transcription"]["model"],
                                            (db.one("SELECT prefs FROM projects WHERE id=?", (pid,))["prefs"] or {}).get("language") or "auto", dur,
                                            lambda p, m_: ctx.update("Transcribing speech", 55 + p * 0.3, m_))
             except ytdl.DownloadError as e:
                 db.update("projects", pid, status="error", error=str(e))
                 raise RuntimeError(str(e))
-            finally:
-                shutil.rmtree(work, ignore_errors=True)
+            except Exception as e:  # noqa: BLE001 - never leave the project stuck on "processing"
+                from ..jobs import Cancelled
+                db.update("projects", pid, status="error", error=("Cancelled. Press Try again to continue (the downloaded audio is kept)." if isinstance(e, Cancelled) else f"{e} (the downloaded audio is kept, so Try again resumes from the transcription step)."))
+                raise
+            shutil.rmtree(work, ignore_errors=True)  # success: remove the temporary audio
             meta["duration"] = round(dur, 1)
             db.update("projects", pid, meta=meta)
             if not tr["words"]:
