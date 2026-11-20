@@ -87,8 +87,12 @@ export function ClipEditor({ project, clip, fonts, patch, refresh }: { project: 
           {tab === "clip" && <ClipTab clip={clip} playhead={clip.start + playhead} patch={(p) => patch(clip.id, p)} seek={(t) => setSeek((s) => ({ t, n: s.n + 1 }))} />}
           {tab === "captions" && (
             <div className="space-y-5">
-              <div><h4 className="mb-2 text-sm font-semibold">Style preset</h4><PresetGallery value={st.caption.preset} onPick={(p) => set({ caption: { ...p.style, preset: p.id } })} /></div>
+              <div className="rounded-md border p-3"><Switch label="Show captions in the video" checked={st.caption.show !== false} onChange={(v) => set({ caption: { show: v } })} />
+                {st.caption.show === false && <p className="mt-2 text-xs text-muted-foreground">Captions are hidden in the preview and the exported video. The SRT subtitle file is still saved next to the MP4 if you want it separately. Hook and ending text are controlled in the Hook & ending tab.</p>}</div>
+              <div className={st.caption.show === false ? "pointer-events-none space-y-5 opacity-40" : "space-y-5"}>
+              <div><h4 className="mb-2 text-sm font-semibold">Style preset</h4><PresetGallery value={st.caption.preset} onPick={(p) => set({ caption: { ...p.style, preset: p.id, show: st.caption.show } })} /></div>
               <div><h4 className="mb-2 text-sm font-semibold">Customize</h4><CaptionControls style={st.caption} fonts={fonts} onChange={(c) => set({ caption: { ...c, preset: st.caption.preset === "custom" ? "custom" : st.caption.preset } })} /></div>
+              </div>
               <div><h4 className="mb-2 text-sm font-semibold">Fix words and timing</h4><WordEditor projectId={project.id} words={words} onSaved={loadWords} onSeek={(t) => setSeek((s) => ({ t: t - clip.start, n: s.n + 1 }))} /></div>
               {project.analysis?.word_timing === "estimated" && <Notice kind="warn">Word timing came from YouTube captions and is estimated. Attach your video to transcribe it precisely.</Notice>}
             </div>

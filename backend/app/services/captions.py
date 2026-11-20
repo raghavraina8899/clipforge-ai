@@ -8,7 +8,7 @@ BASE = {
     "font": "Poppins ExtraBold", "size": 66, "bold": True, "color": "#FFFFFF", "highlight": "#FFE600", "keyword": "#00E676",
     "bg": "", "bgOpacity": 0.6, "outline": 6, "outlineColor": "#000000", "shadow": 0, "blur": 0, "position": 66,
     "lineSpacing": 1.05, "maxWordsPerLine": 3, "wordsAtTime": 3, "animation": "pop", "uppercase": True,
-    "autoKeywords": False, "keywords": "", "emoji": False, "spacing": 0,
+    "autoKeywords": False, "keywords": "", "emoji": False, "spacing": 0, "show": True,
 }
 
 
@@ -126,7 +126,7 @@ def build_ass(words: list, style: Optional[dict], W: int, H: int, duration: floa
         "", "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
     ]
     ev = []
-    words = [w for w in words if w["e"] > 0 and w["s"] < duration]
+    words = [w for w in words if w["e"] > 0 and w["s"] < duration] if st.get("show", True) else []  # captions off: no subtitle text, no emoji
     kws = _keywords(st, words)
     mw = max(1, int(st["maxWordsPerLine"]))
     groups = _group(words, max(1, int(st["wordsAtTime"])))
