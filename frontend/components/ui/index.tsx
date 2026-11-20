@@ -2,6 +2,7 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
+import { JobLoader } from "@/components/loader";
 
 const buttonVariants = cva(
   "inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:pointer-events-none disabled:opacity-50 active:translate-y-px",
@@ -105,15 +106,8 @@ export function Notice({ kind = "info", children }: { kind?: "info" | "warn" | "
   return <div className={cn("rounded-lg border px-3 py-2.5 text-sm shadow-[inset_0_1px_0_hsl(0_0%_100%/.05)]", c)}>{children}</div>;
 }
 
-export function JobBar({ job, onCancel }: { job: { stage: string; progress: number; message: string | null; status: string; error: string | null } | null; onCancel?: () => void }) {
-  if (!job) return null;
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-sm"><span className="font-medium">{job.stage}</span><span className="tabular-nums text-muted-foreground">{Math.round(job.progress)}%</span></div>
-      <Progress value={job.progress} />
-      <div className="flex items-center justify-between text-xs text-muted-foreground"><span>{job.message}</span>{onCancel && ["queued", "running"].includes(job.status) && <button onClick={onCancel} className="underline hover:text-foreground">Cancel</button>}</div>
-    </div>
-  );
+export function JobBar({ job, onCancel, variant = "process", compact = false }: { job: { stage: string; progress: number; message: string | null; status: string; error: string | null } | null; onCancel?: () => void; variant?: "process" | "export" | "upload"; compact?: boolean }) {
+  return <JobLoader job={job} onCancel={onCancel} variant={variant} compact={compact} />;
 }
 
 export const scoreColor = (s: number) => (s >= 70 ? "text-success" : s >= 50 ? "text-warning" : "text-muted-foreground");

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Trash2, FileText, Loader2, Info } from "lucide-react";
 import { api, Clip, ClipSettings, Job, url, useJob } from "@/lib/api";
 import { Button, JobBar, Label, Notice, Select } from "@/components/ui";
@@ -10,6 +10,7 @@ export function ExportPanel({ clip, hasVideo, onUpdate, onSettings, onRefresh }:
   const [plan, setPlan] = useState<any>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [err, setErr] = useState("");
+  const loaderRef = useRef<HTMLDivElement>(null);
   const job = useJob(jobId, () => { onRefresh(); });
   useEffect(() => {
     if (!hasVideo) return;
@@ -18,7 +19,7 @@ export function ExportPanel({ clip, hasVideo, onUpdate, onSettings, onRefresh }:
   }, [clip.id, clip.settings.export, clip.settings.format, clip.settings.layout, clip.settings.enhance.zoom, hasVideo]);
   const start = async () => {
     setErr("");
-    try { const r = await api<{ job_id: string }>(`/clips/${clip.id}/render`, { body: {} }); setJobId(r.job_id); } catch (e: any) { setErr(e.message); }
+    try { const r = await api<{ job_id: string }>(`/clips/${clip.id}/render`, { body: {} }); setJobId(r.job_id); setTimeout(() => loaderRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 250); } catch (e: any) { setErr(e.message); }
   };
   const running = job && ["queued", "running"].includes(job.status);
   return (
@@ -40,7 +41,7 @@ export function ExportPanel({ clip, hasVideo, onUpdate, onSettings, onRefresh }:
       )}
       {err && <Notice kind="error">{err}</Notice>}
       <Button size="lg" className="w-full" onClick={start} disabled={!hasVideo || !!running}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}Render clip (no watermark)</Button>
-      {job && job.status !== "done" && <JobBar job={job} onCancel={() => api(`/jobs/${job.id}/cancel`, { method: "POST" })} />}
+      <div ref={loaderRef}>{job && job.status !== "done" && <JobBar variant="export" job={job} onCancel={() => api(`/jobs/${job.id}/cancel`, { method: "POST" })} />}</div>
       {job?.status === "error" && <Notice kind="error">{job.error}</Notice>}
       {job?.status === "done" && job.result?.notes?.length > 0 && <Notice kind="info">{job.result.notes.map((n: string, i: number) => <div key={i}>{n}</div>)}</Notice>}
       <div>

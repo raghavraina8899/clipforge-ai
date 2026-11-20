@@ -4,7 +4,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Download, FileVideo, Loader2, Plus, RefreshCw, Trash2, Wand2, Archive } from "lucide-react";
 import { API, api, Clip, Job, Project, upload, useFonts, useJob } from "@/lib/api";
-import { Badge, Button, Card, Input, JobBar, Notice, Progress, scoreColor } from "@/components/ui";
+import { Badge, Button, Card, Input, JobBar, Notice, scoreColor } from "@/components/ui";
+import { JobLoader } from "@/components/loader";
 import { StatusBadge } from "@/components/status-badge";
 import { ClipEditor } from "@/components/clip-editor";
 import { DurationPicker, DurationValue } from "@/components/duration-picker";
@@ -244,8 +245,7 @@ function RenderChip({ jobId, onDone }: { jobId: string; onDone: () => void }) {
   if (!job) return null;
   return (
     <div className="mt-2">
-      <Progress value={job.progress} />
-      <div className="mt-1 flex justify-between text-[11px] text-muted-foreground"><span className="truncate">{job.status === "error" ? <span className="text-danger">{job.error}</span> : job.message || job.stage}</span><span>{Math.round(job.progress)}%</span></div>
+      {job.status === "error" ? <div className="mt-1 text-[11px] text-danger">{job.error}</div> : <JobLoader job={job} variant="export" compact />}
     </div>
   );
 }
@@ -286,7 +286,7 @@ function AttachVideo({ project, onStarted }: { project: Project; onStarted: (job
         </div>
       )}
       <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"><FileVideo className="h-4 w-4" />Choose video file<input type="file" accept="video/*,.mkv,.avi,.ts" className="hidden" onChange={(e) => go(e.target.files?.[0])} /></label>
-      {pct !== null && <div><Progress value={pct} /><p className="mt-1 text-xs text-muted-foreground">{pct < 100 ? `Uploading ${Math.round(pct)}%` : "Reading the video…"}</p></div>}
+      {pct !== null && <JobLoader variant="upload" job={{ stage: pct < 100 ? "Uploading" : "Reading the video", progress: pct, message: pct < 100 ? "Sending your file to Frameflow on this computer" : "Checking the file", status: "running" }} />}
       {err && <Notice kind="error">{err}</Notice>}
     </Card>
   );

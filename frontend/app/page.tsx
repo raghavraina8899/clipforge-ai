@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Film, Scissors, Download, FolderKanban, Plus, Loader2 } from "lucide-react";
 import { api, url, Job, Project } from "@/lib/api";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Notice, PageHeader, Progress } from "@/components/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Notice, PageHeader } from "@/components/ui";
+import { JobLoader } from "@/components/loader";
 import { fmtTime, timeAgo } from "@/lib/utils";
 import { Counter, TiltCard } from "@/components/fx";
 import { StatusBadge } from "@/components/status-badge";
@@ -46,9 +47,8 @@ export default function Dashboard() {
           {!s?.active_jobs.length ? <p className="text-sm text-muted-foreground">Nothing is processing right now.</p> : (
             <div className="space-y-4">
               {s.active_jobs.map((j) => (
-                <Link key={j.id} href={`/projects/${j.project_id}`} className="block rounded-md border p-3 hover:bg-accent/50">
-                  <div className="mb-2 flex items-center justify-between text-sm"><span className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />{j.kind === "render" ? "Rendering clip" : j.stage}</span><span className="tabular-nums text-muted-foreground">{Math.round(j.progress)}%</span></div>
-                  <Progress value={j.progress} /><p className="mt-1 text-xs text-muted-foreground">{j.message}</p>
+                <Link key={j.id} href={`/projects/${j.project_id}`} className="block rounded-xl transition hover:-translate-y-0.5">
+                  <JobLoader job={j} variant={j.kind === "render" ? "export" : "process"} />
                 </Link>
               ))}
             </div>

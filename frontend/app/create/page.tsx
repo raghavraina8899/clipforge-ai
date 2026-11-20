@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Youtube, Upload, Radio, FileVideo, Pause, Play, Square, Circle, X } from "lucide-react";
 import { api, upload, ApiError } from "@/lib/api";
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Notice, PageHeader, Progress, Select, Tabs } from "@/components/ui";
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Notice, PageHeader, Select, Tabs } from "@/components/ui";
+import { JobLoader } from "@/components/loader";
 import { DurationPicker, defaultDuration, DurationValue } from "@/components/duration-picker";
 import { fmtBytes, fmtTime, parseTime, ytLinkRange } from "@/lib/utils";
 
@@ -129,8 +130,8 @@ function UploadPane(c: Common) {
         </div>
       )}
       {pct !== null && (
-        <div><div className="mb-1 flex justify-between text-sm"><span>{pct < 100 ? "Uploading" : "Reading the video…"}</span><span className="tabular-nums">{Math.round(pct)}%</span></div><Progress value={pct} />
-          <button className="mt-1 text-xs text-muted-foreground underline" onClick={() => abort.current?.()}>Cancel upload</button></div>
+        <div><JobLoader variant="upload" job={{ stage: pct < 100 ? "Uploading" : "Reading the video…", progress: pct, message: pct < 100 ? "Sending your video to Frameflow on this computer" : "Checking the file", status: "running" }} />
+          <button className="mt-2 text-xs text-muted-foreground underline" onClick={() => abort.current?.()}>Cancel upload</button></div>
       )}
       {err && <Notice kind="error">{err}</Notice>}
       <Button size="lg" className="w-full" disabled={!file || pct !== null} onClick={go}>Analyze and create clips</Button>
