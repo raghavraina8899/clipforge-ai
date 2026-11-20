@@ -10,3 +10,4 @@ pillow>=10
 youtube-transcript-api>=1.0
 yt-dlp[default]>=2025.1
 av>=14,<17
+indic-transliteration>=2.3

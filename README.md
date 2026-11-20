@@ -78,6 +78,7 @@ Set `CLIPFORGE_DEV=1 ./start.sh` for development mode (hot reload).
 * **Smart crop**: OpenCV Haar face detector + mouth-motion heuristic for the active speaker, smoothed with a dead-zone camera. Works best with front-facing faces; otherwise it falls back to center crop and reports that. (MediaPipe can be added behind `services/vision.py`; it is not required.)
 * **Resolution honesty**: a 16:9 → 9:16 crop uses only ~1/3 of the source width. If an export needs upscaling, the result states the factor. 1440p/4K are reduced unless the source really has the pixels; 60 fps is not invented from 30 fps.
 * **Emoji** in captions are composited as image overlays (libass cannot render colour emoji); this needs macOS' Apple Color Emoji font and is skipped with a notice elsewhere.
+* **Hindi / Hinglish**: the *Spoken language* option tells Whisper what to listen for. *Hindi* gives Devanagari captions; *Hinglish* gives Hindi in English letters (a Hinglish prompt plus a built-in romanizer, so output is natural but can differ from how you'd spell it; fix words in the Captions tab). Projects already transcribed in Devanagari have a one-click convert button.
 * **Music / SFX** are never added automatically; only files you upload.
 * Only process content you own or are permitted to use.
 

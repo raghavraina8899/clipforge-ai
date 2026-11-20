@@ -26,8 +26,11 @@ export default function Create() {
       <Card className="mt-4"><CardContent className="space-y-5 p-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2"><DurationPicker value={dur} onChange={setDur} /></div>
-          <div><Label>Spoken language</Label>
-            <Select value={lang} onChange={(e) => setLang(e.target.value)}><option value="auto">Auto-detect</option><option value="en">English</option><option value="hi">Hindi</option></Select></div>
+          <div><Label>Spoken language (what the speaker says)</Label>
+            <Select value={lang} onChange={(e) => setLang(e.target.value)}>
+              <option value="auto">Auto-detect</option><option value="en">English</option>
+              <option value="hinglish">Hinglish – Hindi written in English letters</option><option value="hi">Hindi – Devanagari script (हिंदी)</option></Select>
+            <p className="mt-1 text-xs text-muted-foreground">Tells the speech model what to listen for, and which letters the captions use. For Hindi or mixed Hindi-English videos, pick Hinglish.</p></div>
           <div><Label>Maximum clips</Label><Input type="number" min={1} max={30} value={maxClips} onChange={(e) => setMaxClips(Number(e.target.value))} /></div>
         </div>
         {mode === "upload" && <UploadPane {...common} />}

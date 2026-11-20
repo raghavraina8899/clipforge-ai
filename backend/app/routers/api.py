@@ -209,7 +209,7 @@ def parse_prefs(q: dict) -> dict:
                 out[k] = float(q[k]) if "dur" in k else int(q[k])
             except ValueError:
                 err(400, f"Invalid {k}.")
-    if q.get("language") in ("auto", "en", "hi"):
+    if q.get("language") in ("auto", "en", "hi", "hinglish"):
         out["language"] = q["language"]
     return out
 
@@ -316,6 +316,11 @@ def youtube_job(pid: str, info: dict, url: str, authorized: bool):
                       meta={**meta, "duration": 0})
             return {"transcript": False}
         words = sources.segments_to_words(t["segments"])
+        if ((db.one("SELECT prefs FROM projects WHERE id=?", (pid,))["prefs"] or {}).get("language")) == "hinglish":
+            from ..services import hinglish as _h
+            _h.romanize_words(words)
+            for sg in t["segments"]:
+                sg["text"] = _h.romanize(sg["text"])
         P["transcript"].write_text(json.dumps({"language": t["language"][:2], "model": "youtube-captions", "word_timing": "estimated", "segments": t["segments"], "words": words}, ensure_ascii=False))
         meta["duration"] = round(t["segments"][-1]["end"], 1) if t["segments"] else 0
         db.update("projects", pid, meta=meta)
@@ -362,6 +367,27 @@ def retry_youtube(pid: str):
         err(400, str(e))
     db.update("projects", pid, status="processing", error=None)
     return {"job_id": jobs.submit("analyze", youtube_job(pid, info, p["source_url"], bool(meta.get("yt_authorized"))), project_id=pid)}
+
+
+@router.post("/projects/{pid}/romanize")
+def romanize_project(pid: str):
+    """Convert an existing Devanagari transcript (and clip titles/hooks) to Hinglish, no re-transcription needed."""
+    from ..services import hinglish
+    get_project(pid)
+    tr = pipeline.load_transcript(pid)
+    if not tr:
+        err(404, "No transcript yet.")
+    with pipeline._tr_lock:
+        n = hinglish.romanize_words(tr["words"])
+        for sg in tr.get("segments", []):
+            sg["text"] = hinglish.romanize(sg["text"])
+        pipeline.paths(pid)["transcript"].write_text(json.dumps(tr, ensure_ascii=False))
+    for c in db.many("SELECT id, title, hook, caption, reason FROM clips WHERE project_id=?", (pid,)):
+        db.update("clips", c["id"], title=hinglish.romanize(c["title"] or ""), hook=hinglish.romanize(c["hook"] or ""),
+                  caption=hinglish.romanize(c["caption"] or ""), reason=hinglish.romanize(c["reason"] or ""))
+    p = get_project(pid)
+    db.update("projects", pid, analysis={**(p.get("analysis") or {}), "devanagari": False}, prefs={**(p.get("prefs") or {}), "language": "hinglish"})
+    return {"converted_words": n}
 
 
 @router.post("/projects/{pid}/authorize-download")

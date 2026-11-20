@@ -13,6 +13,8 @@ from .config import FONTS_DIR, PROJECTS_DIR, project_dir
 from .jobs import JobCtx
 from .services import analyze, ffmpeg, render, settings_store, transcribe
 
+from .services.hinglish import has_devanagari as has_dev
+
 log = logging.getLogger("pipeline")
 DEFAULT_PREFS = {"min_dur": 30, "max_dur": 60, "max_clips": 8, "language": "auto"}
 
@@ -84,7 +86,8 @@ def run_analysis(pid: str, ctx: JobCtx, p0: float = 0, p1: float = 100) -> None:
                           proj["name"], float(prefs["min_dur"]), float(prefs["max_dur"]), int(prefs["max_clips"]))
     n = make_clips(pid, res)
     db.update("projects", pid, analysis={"summary": res["summary"], "engine": res["engine"], "note": res["note"], "clips": n,
-                                          "language": tr.get("language"), "word_timing": tr.get("word_timing", "precise")},
+                                          "language": tr.get("language"), "word_timing": tr.get("word_timing", "precise"),
+                                          "devanagari": any(has_dev(w["w"]) for w in tr["words"])},
               language=tr.get("language"))
 
 

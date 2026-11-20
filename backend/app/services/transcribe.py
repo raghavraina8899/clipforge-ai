@@ -8,7 +8,12 @@ from typing import Callable, Optional
 log = logging.getLogger("transcribe")
 _models: dict = {}
 _lock = threading.Lock()
-LANGS = {"en": "English", "hi": "Hindi"}
+LANGS = {"en": "English", "hi": "Hindi", "hinglish": "Hinglish"}
+
+
+def hinglish_text(t: str) -> str:
+    from .hinglish import romanize
+    return romanize(t)
 
 
 def _model(size: str):
@@ -28,14 +33,19 @@ def transcribe(audio: Path, out_json: Path, size: str = "small", language: str =
         model = _model(size)
     except Exception as e:  # noqa: BLE001
         raise RuntimeError(f"Could not load the Whisper model “{size}”. The first run needs internet access to download it. Details: {e}")
-    lang = None if language in ("auto", "", None) else language
+    hinglish = language == "hinglish"
+    lang = "hi" if hinglish else (None if language in ("auto", "", None) else language)
+    # A Hinglish prompt nudges Whisper to write Hindi in English letters; any Devanagari left is converted below.
+    prompt = "Aaj hum baat karenge, mujhe lagta hai ki yeh bahut accha hai. Kya aap samajh rahe ho? Bilkul, chalo shuru karte hain." if hinglish else None
     segments, info = model.transcribe(str(audio), language=lang, word_timestamps=True, vad_filter=True,
-                                      condition_on_previous_text=False, beam_size=5)
+                                      condition_on_previous_text=False, beam_size=5, initial_prompt=prompt)
     words, segs = [], []
     for seg in segments:
-        segs.append({"start": round(seg.start, 3), "end": round(seg.end, 3), "text": seg.text.strip()})
+        segs.append({"start": round(seg.start, 3), "end": round(seg.end, 3), "text": hinglish_text(seg.text.strip()) if hinglish else seg.text.strip()})
         for w in seg.words or []:
             t = w.word.strip()
+            if hinglish:
+                t = hinglish_text(t)
             if t:
                 words.append({"w": t, "s": round(w.start, 3), "e": round(w.end, 3)})
         if on_progress and duration:

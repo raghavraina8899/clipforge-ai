@@ -100,7 +100,7 @@ export default function ProjectPage() {
             <StatusBadge status={p.status} />
             {p.meta?.duration ? <span>{fmtTime(p.meta.duration)}</span> : null}
             {p.meta?.width ? <span>{p.meta.width}×{p.meta.height} · {Math.round(p.meta.fps)} fps</span> : null}
-            {p.language && <span>Language: {p.language.toUpperCase()}</span>}
+            {p.language && <span>Language: {p.prefs?.language === "hinglish" ? "HINGLISH" : p.language.toUpperCase()}</span>}
             {p.analysis?.engine && <Badge>{p.analysis.engine === "builtin" ? "Built-in analyzer" : `AI: ${p.analysis.engine}`}</Badge>}
           </div>
         </div>
@@ -123,6 +123,12 @@ export default function ProjectPage() {
         <div className="mb-5 space-y-3"><Notice kind="error"><b>Processing failed.</b> {p.error}</Notice>
           {p.source_type === "youtube" && <Button variant="secondary" onClick={async () => { try { const r = await api<{ job_id: string }>(`/projects/${id}/retry`, { method: "POST", body: {} }); setJobId(r.job_id); refresh(); } catch (e: any) { setErr(e.message); } }}><RefreshCw className="h-4 w-4" />Try again</Button>}
         </div>
+      )}
+      {p.analysis?.devanagari && !busy && (
+        <div className="mb-5"><Notice kind="info">
+          <div className="flex flex-wrap items-center justify-between gap-3"><span>The captions are in Hindi script (हिंदी). Want them in English letters (Hinglish)?</span>
+            <Button size="sm" onClick={async () => { try { await api(`/projects/${id}/romanize`, { method: "POST", body: {} }); refresh(); } catch (e: any) { setErr(e.message); } }}>Convert captions to Hinglish</Button></div>
+        </Notice></div>
       )}
       {p.analysis?.note && !busy && <div className="mb-5"><Notice kind="warn">{p.analysis.note}</Notice></div>}
       {p.analysis?.summary && !busy && <p className="mb-5 text-sm text-muted-foreground"><span className="font-medium text-foreground">Summary: </span>{p.analysis.summary}</p>}
