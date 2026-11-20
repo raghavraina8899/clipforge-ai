@@ -610,7 +610,7 @@ def framing(cid: str, layout: str = "smart"):
     pv = pipeline.preview_info(c)
     if not P["proxy"].exists() and not pv:
         err(400, "No video is attached.")
-    cache = P["work"] / f"framing2-{cid}-{c['start']:.2f}-{c['end']:.2f}.json"
+    cache = P["work"] / f"framing3-{cid}-{c['start']:.2f}-{c['end']:.2f}.json"
     if not P["proxy"].exists() and cache.exists() and pv is None:
         cache.unlink()
     if cache.exists():

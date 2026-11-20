@@ -1,0 +1,20 @@
+INFO:     Started server process [39373]
+INFO:     Waiting for application startup.
+2026-11-20 11:44:27,002 INFO clipforge: ClipForge backend ready. ffmpeg=/opt/homebrew/bin/ffmpeg
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:54922 - "GET /api/system HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54926 - "GET /api/projects/35c01323e608 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54928 - "GET /api/clips/4e38fb278ba4/framing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54930 - "POST /api/clips/4e38fb278ba4/render HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54932 - "GET /api/jobs/578233da2afc HTTP/1.1" 200 OK
+2026-11-20 11:44:29,761 INFO ffmpeg: ffmpeg -ss 0.000 -t 15.710 -i /private/tmp/claude-502/-Users-Raghav-Desktop-clipper/7c2e70d4-1b40-4d8d-b380-debd040fc05a/scratchpad/data/projects/35c01323e608/original.mp4 -/filter_complex graph.txt -map [vout] -map [aout] -c:a aac -b:a 192k -c:v libx264 -preset slow -crf 17 -pix_fmt yuv420p -movflags +faststart -t 15.710 /private/tmp/claude-502/-Users-Raghav-Desktop-clipper/7c2e70d4-1b40-4d8d-b380-debd040fc05a/scratchpad/data/projects/35c01323e608/exports/01-Here-is-the-biggest-mistake-people-make-4e38-20261120-114428.mp4
+INFO:     127.0.0.1:54934 - "GET /api/jobs/578233da2afc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54936 - "GET /api/jobs/578233da2afc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54938 - "GET /api/jobs/578233da2afc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54940 - "GET /api/jobs/578233da2afc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54942 - "GET /api/jobs/578233da2afc HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [39373]

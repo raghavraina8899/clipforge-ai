@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause, RotateCcw } from "lucide-react";
 import { captionAt } from "@/lib/captions";
+import { FACECAM_DEFAULT, facecamCaptionPos, facecamGeometry } from "@/lib/facecam";
 import type { ClipSettings, Word } from "@/lib/api";
 import { fmtTime } from "@/lib/utils";
 
@@ -55,29 +56,28 @@ export function ClipPreview({ src, srcW, srcH, start, end, settings, words, fram
     const layout = st.layout;
     const fc = fr?.facecam;
     if (fc && (layout === "smart" || layout === "facecam")) {
-      // stacked: facecam on top, main content (gameplay / screen) below
-      const opt = st.facecam || { share: 0.4, content: "fit", hide: true };
-      const Ht = Math.round(H * Math.min(0.6, Math.max(0.25, opt.share))), Hb = H - Ht;
-      const asp = W / Ht;
-      const fcw = Math.min(Math.max(fc.w, fc.h * asp), srcW, srcH * asp), fch = fcw / asp;
-      const fx = Math.min(Math.max(fc.x + fc.w / 2 - fcw / 2, 0), srcW - fcw), fy = Math.min(Math.max(fc.y + fc.h / 2 - fch / 2, 0), srcH - fch);
-      ctx.drawImage(v, fx * sx, fy * sx, fcw * sx, fch * sx, 0, 0, W, Ht);
+      // stacked: facecam on top, main content (gameplay / screen) below, facecam cropped out of the content
+      const g = facecamGeometry(fc, srcW, srcH, W, H, { ...FACECAM_DEFAULT, ...(st.facecam || {}) });
+      const { Ht, Hb } = g;
+      ctx.drawImage(v, g.face.x * sx, g.face.y * sx, g.face.w * sx, g.face.h * sx, 0, 0, W, Ht);
       ctx.save(); ctx.beginPath(); ctx.rect(0, Ht, W, Hb); ctx.clip();
       const base = ctx.filter;
+      const cx = g.content.x * sx, cy = g.content.y * sx, cw = g.content.w * sx, ch = g.content.h * sx;
+      const fill = (st.facecam?.content ?? "fit") === "fill";
       let f: number;
-      if (opt.content === "fill") f = Math.max(W / vw, Hb / vh);
+      if (fill) f = Math.max(W / cw, Hb / ch);
       else {
-        const cover = Math.max(W / vw, Hb / vh);
+        const cover = Math.max(W / cw, Hb / ch);
         ctx.filter = `blur(${W / 18}px) brightness(.9)`;
-        ctx.drawImage(v, (W - vw * cover) / 2, Ht + (Hb - vh * cover) / 2, vw * cover, vh * cover);
+        ctx.drawImage(v, cx, cy, cw, ch, (W - cw * cover) / 2, Ht + (Hb - ch * cover) / 2, cw * cover, ch * cover);
         ctx.filter = base;
-        f = Math.min(W / vw, Hb / vh);
+        f = Math.min(W / cw, Hb / ch);
       }
-      const ox = (W - vw * f) / 2, oy = Ht + (Hb - vh * f) / 2;
-      ctx.drawImage(v, ox, oy, vw * f, vh * f);
-      if (opt.hide) {
-        ctx.save(); ctx.beginPath(); ctx.rect(ox + fc.x * sx * f, oy + fc.y * sx * f, fc.w * sx * f, fc.h * sx * f); ctx.clip();
-        ctx.filter = `blur(${W / 40}px)`; ctx.drawImage(v, ox, oy, vw * f, vh * f); ctx.restore();
+      const ox = (W - cw * f) / 2, oy = Ht + (Hb - ch * f) / 2;
+      ctx.drawImage(v, cx, cy, cw, ch, ox, oy, cw * f, ch * f);
+      if (g.mode === "blur") {
+        ctx.save(); ctx.beginPath(); ctx.rect(ox + (fc.x * sx - cx) * f, oy + (fc.y * sx - cy) * f, fc.w * sx * f, fc.h * sx * f); ctx.clip();
+        ctx.filter = `blur(${W / 40}px)`; ctx.drawImage(v, cx, cy, cw, ch, ox, oy, cw * f, ch * f); ctx.restore();
       }
       ctx.restore();
     } else if (layout === "smart" || layout === "center" || layout === "face" || layout === "facecam") {
@@ -136,7 +136,8 @@ export function ClipPreview({ src, srcW, srcH, start, end, settings, words, fram
     const v = vref.current; if (!v) return;
     if (v.paused) { if (v.currentTime >= end - 0.1 || v.currentTime < start) v.currentTime = start; v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); }
   };
-  const st = settings.caption as any;
+  const stacked = !!framing?.facecam && (settings.layout === "smart" || settings.layout === "facecam");
+  const st = (stacked ? { ...settings.caption, position: facecamCaptionPos(Math.round(540 / ar * Math.min(0.6, Math.max(0.25, settings.facecam?.share ?? 0.4))), canvasH, settings.facecam?.caption ?? "face") } : settings.caption) as any;
   const k = (Math.min(boxW, boxW / ar)) / 1080 * (ar >= 1 ? ar : 1);
   const shown = captionAt(words.map((w) => ({ ...w, s: w.s - start, e: w.e - start })), t, st);
   const fs = (st.size || 66) * Math.min(boxW, boxW / ar) / 1080;

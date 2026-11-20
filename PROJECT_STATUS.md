@@ -29,7 +29,8 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 
 ## Added 2026-11-20: facecam + content layout
 - "Smart (auto)": if a small face overlay near an edge/corner is detected (streamer facecam), export stacks face on top and full gameplay/screen below (share slider, fit-with-blur or fill, optional blur of the facecam inside the lower content). Vlogs (large central face) keep the face-follow crop. Explicit options: "Facecam + content", "Face-follow crop".
-- Tested on a synthetic gameplay+facecam video (export + browser preview). Not yet tried on the real GTA project.
+- Facecam overlay border is detected from the video (strongest straight edge near the face box, snapped to frame corners); the face panel shows only the overlay, and the overlay is cropped out of the gameplay area (blurred only if it floats away from the edges). Captions default to the face panel so gameplay stays clear (option: seam / bottom).
+- Tested on synthetic gameplay+facecam videos (export + browser preview); the corner case is exact, a floating box far from edges is approximate. Real GTA project: user-verified preview.
 - Backend now runs on Python 3.12 (needed for current yt-dlp); `av<17` pinned for faster-whisper.
 
 ## Not yet verified / known gaps

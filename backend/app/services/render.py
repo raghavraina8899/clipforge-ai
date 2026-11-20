@@ -50,6 +50,29 @@ def _emoji_png(emoji: str, dst: Path, size: int) -> bool:
         return False
 
 
+def facecam_geometry(fc: dict, sw: int, sh: int, W: int, H: int, share: float, remove: bool) -> dict:
+    """Layout maths shared (mirrored in the UI): face panel on top, content below with the facecam removed."""
+    Ht = EVEN(H * min(0.6, max(0.25, share)))
+    asp = W / Ht
+    fcw = min(fc["w"], fc["h"] * asp)  # stay inside the overlay: no game pixels around the face
+    fch = fcw / asp
+    fx, fy = fc["x"] + (fc["w"] - fcw) / 2, fc["y"] + (fc["h"] - fch) / 2
+    content, mode = (0.0, 0.0, float(sw), float(sh)), "keep"
+    if remove:
+        m, opts = 8, []
+        if fc["x"] + fc["w"] >= sw - 4: opts.append((0.0, 0.0, fc["x"] - m, float(sh)))
+        if fc["x"] <= 4: opts.append((fc["x"] + fc["w"] + m, 0.0, sw - (fc["x"] + fc["w"] + m), float(sh)))
+        if fc["y"] <= 4: opts.append((0.0, fc["y"] + fc["h"] + m, float(sw), sh - (fc["y"] + fc["h"] + m)))
+        if fc["y"] + fc["h"] >= sh - 4: opts.append((0.0, 0.0, float(sw), fc["y"] - m))
+        best = max(opts, key=lambda o: o[2] * o[3]) if opts else None
+        if best and best[2] * best[3] >= 0.35 * sw * sh:
+            content, mode = best, "crop"
+        else:
+            mode = "blur"  # floating overlay (or removing it would lose too much): blur it instead
+    content = tuple(float(EVEN(v)) if i >= 2 else float(int(v) // 2 * 2) for i, v in enumerate(content))
+    return {"Ht": Ht, "Hb": H - Ht, "face": (fx, fy, fcw, fch), "content": content, "mode": mode}
+
+
 def plan(src: dict, settings: dict, track: Optional[dict]) -> dict:
     """Pure calculation of output geometry / honesty notes (also used by the UI before export)."""
     sw, sh, sfps = src["width"], src["height"], src["fps"]
@@ -159,33 +182,38 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
         graph.append("[0:v]" + ",".join(chain) + "[base]")
     elif layout == "facecam":
         fcs = st.get("facecam") or {}
-        share = min(0.6, max(0.25, float(fcs.get("share", 0.4))))
-        Ht = EVEN(H * share)
-        Hb = H - Ht
         fc = track["facecam"]
-        asp = W / Ht
-        fcw = max(fc["w"], fc["h"] * asp)
-        fcw = min(fcw, sw, sh * asp)
-        fch = fcw / asp
-        fx = min(max(fc["x"] + fc["w"] / 2 - fcw / 2, 0), sw - fcw)
-        fy = min(max(fc["y"] + fc["h"] / 2 - fch / 2, 0), sh - fch)
+        g = facecam_geometry(fc, sw, sh, W, H, float(fcs.get("share", 0.4)), bool(fcs.get("hide", True)))
+        Ht, Hb = g["Ht"], g["Hb"]
+        fx, fy, fcw, fch = g["face"]
+        cx0, cy0, cw0, ch0 = g["content"]
         if W / fcw > 1.5:
             notes.append(f"The facecam is small in the source; it is enlarged {W / fcw:.1f}× and will look soft.")
+        if g["mode"] == "crop":
+            notes.append("Facecam removed from the gameplay area by cropping it out.")
+        elif fcs.get("hide", True):
+            notes.append("The facecam overlay is not on an edge, so it was blurred inside the content area instead of cropped out.")
         pre = (",".join(chain) + ",") if chain else ""
         fill_content = fcs.get("content") == "fill"
+        ccrop = f"crop={int(cw0)}:{int(ch0)}:{int(cx0)}:{int(cy0)}," if g["mode"] == "crop" else ""
         patch = ""
-        if fcs.get("hide", True):
+        if g["mode"] == "blur":
             patch = (f"split=2[g1][g2];[g2]crop={int(fc['w'])}:{int(fc['h'])}:{int(fc['x'])}:{int(fc['y'])},gblur=sigma=30[pt];"
                      f"[g1][pt]overlay={int(fc['x'])}:{int(fc['y'])},")
         graph.append(f"[0:v]{pre}split={2 if fill_content else 3}[fa]{'' if fill_content else '[ga]'}[gb]")
         graph.append(f"[fa]crop={int(fcw)}:{int(fch)}:{fx:.0f}:{fy:.0f},scale={W}:{Ht}:flags=lanczos[top]")
         if fill_content:
-            graph.append(f"[gb]{patch}scale={W}:{Hb}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{Hb}[bot]")
+            graph.append(f"[gb]{ccrop}{patch}scale={W}:{Hb}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{Hb}[bot]")
         else:
-            graph.append(f"[ga]scale={W}:{Hb}:force_original_aspect_ratio=increase,crop={W}:{Hb},gblur=sigma=40,eq=brightness=-0.08[gbg]")
-            graph.append(f"[gb]{patch}scale={W}:{Hb}:force_original_aspect_ratio=decrease:flags=lanczos[gfg]")
+            graph.append(f"[ga]{ccrop}scale={W}:{Hb}:force_original_aspect_ratio=increase,crop={W}:{Hb},gblur=sigma=40,eq=brightness=-0.08[gbg]")
+            graph.append(f"[gb]{ccrop}{patch}scale={W}:{Hb}:force_original_aspect_ratio=decrease:flags=lanczos[gfg]")
             graph.append("[gbg][gfg]overlay=(W-w)/2:(H-h)/2[bot]")
         graph.append("[top][bot]vstack=inputs=2[base]")
+        # captions go where they do not cover the gameplay
+        where = fcs.get("caption", "face")
+        cap = dict(st.get("caption") or {})
+        cap["position"] = {"face": (Ht * 0.84) / H * 100, "seam": Ht / H * 100, "bottom": 93.0}.get(where, (Ht * 0.84) / H * 100)
+        st["caption"] = cap
     elif layout == "split":
         ratio = W / (H / 2)
         t0, t1 = track["tracks"][0], track["tracks"][-1]

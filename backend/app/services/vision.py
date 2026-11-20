@@ -34,6 +34,7 @@ def track(video: Path, start: float, end: float, src_w: int, src_h: int, crop_w:
     scale = 640.0 / pw if pw > 640 else 1.0
     tracks: list = []  # each: {pts: [(t,cx,cy)], prev: patch, ema: float}
     samples: list = []  # per-time: {t, faces:[track idx]}
+    keep_frames: list = []  # a few gray frames, used to find the facecam overlay's exact border
     n = max(1, int((end - start) / STEP))
     for i in range(n + 1):
         if ctx:
@@ -44,6 +45,8 @@ def track(video: Path, start: float, end: float, src_w: int, src_h: int, crop_w:
         if not ok:
             continue
         gray = cv2.cvtColor(cv2.resize(frame, None, fx=scale, fy=scale) if scale != 1 else frame, cv2.COLOR_BGR2GRAY)
+        if i % max(1, n // 8) == 0:
+            keep_frames.append(gray.copy())
         faces = cc.detectMultiScale(gray, 1.15, 6, minSize=(max(24, int(gray.shape[1] * 0.04)),) * 2)
         seen = []
         for (x, y, w, h) in faces:
@@ -124,6 +127,8 @@ def track(video: Path, start: float, end: float, src_w: int, src_h: int, crop_w:
             persistent.append({"cx": round(_median([p[1] for p in tr["pts"]]) * sx, 1), "cy": round(_median([p[2] for p in tr["pts"]]) * sy, 1)})
     persistent.sort(key=lambda p: p["cx"])
     facecam = _facecam(tracks, eligible, sx, sy, src_w, src_h)
+    if facecam:
+        facecam = _refine(keep_frames, facecam, scale / sx, src_w, src_h)
     return {"mode": "face", "points": simp, "tracks": persistent, "facecam": facecam, "note": f"Tracked {len(eligible)} face(s)" + (f"; active-speaker switching across {len(persistent)} people." if len(persistent) > 1 else ".")}
 
 
@@ -148,6 +153,45 @@ def _facecam(tracks: list, eligible: set, sx: float, sy: float, src_w: int, src_
     at_edge = cx / src_w < 0.3 or cx / src_w > 0.7 or cy / src_h < 0.3 or cy / src_h > 0.7
     if not (small and at_edge):
         return None
-    w, h = min(fw * 2.4, src_w * 0.6), min(fh * 2.4, src_h * 0.6)
+    w, h = min(fw * 2.6, src_w * 0.6), min(fh * 2.6, src_h * 0.6)
     x, y = min(max(cx - w / 2, 0), src_w - w), min(max(cy - h / 2, 0), src_h - h)
     return {"x": round(float(x), 1), "y": round(float(y), 1), "w": round(float(w), 1), "h": round(float(h), 1)}
+
+
+def _refine(frames: list, rect: dict, k: float, src_w: int, src_h: int) -> dict:
+    """Snap the estimated facecam rectangle to the overlay's real border: overlays are static rectangles,
+    so their edges show up as strong, constant gradients across sampled frames. k = source px -> gray px."""
+    import numpy as np
+    if len(frames) < 3:
+        return rect
+    gh, gw = frames[0].shape
+    x0, y0, x1, y1 = rect["x"] * k, rect["y"] * k, (rect["x"] + rect["w"]) * k, (rect["y"] + rect["h"]) * k
+    bx, by = 0.14 * gw, 0.18 * gh
+    st = np.stack([f.astype("float32") for f in frames])
+    gx = np.abs(np.diff(st, axis=2)).mean(axis=0)  # vertical edges  (H, W-1)
+    gy = np.abs(np.diff(st, axis=1)).mean(axis=0)  # horizontal edges (H-1, W)
+    cols = gx[int(max(0, y0)):int(min(gh, y1)), :].mean(axis=0)
+    rows = gy[:, int(max(0, x0)):int(min(gw, x1))].mean(axis=1)
+
+    def best(profile, lo, hi, est):
+        """Strongest edge near the estimate (the overlay border is a long, perfectly straight, high-contrast line)."""
+        lo, hi = int(max(1, lo)), int(min(len(profile) - 1, hi))
+        if hi <= lo:
+            return est
+        seg = profile[lo:hi]
+        i = int(seg.argmax())
+        return lo + i + 1 if seg[i] > 2.0 * float(np.median(profile)) + 1.0 else est
+
+    # the estimate (face x 2.6) usually lies inside the overlay, so search further outward than inward
+    nx0, nx1 = best(cols, x0 - 0.10 * gw, x0 + 0.04 * gw, x0), best(cols, x1 - 0.04 * gw, x1 + 0.10 * gw, x1)
+    ny0, ny1 = best(rows, y0 - 0.12 * gh, y0 + 0.05 * gh, y0), best(rows, y1 - 0.05 * gh, y1 + 0.12 * gh, y1)
+    # overlays in a corner touch the frame edge: snap when close
+    snap_x, snap_y = 0.06 * gw, 0.06 * gh
+    if nx0 < snap_x: nx0 = 0
+    if ny0 < snap_y: ny0 = 0
+    if nx1 > gw - snap_x: nx1 = gw
+    if ny1 > gh - snap_y: ny1 = gh
+    w, h = (nx1 - nx0) / k, (ny1 - ny0) / k
+    if not (0.6 * rect["w"] <= w <= 2.2 * rect["w"] and 0.6 * rect["h"] <= h <= 2.2 * rect["h"]):
+        return rect
+    return {"x": round(nx0 / k, 1), "y": round(ny0 / k, 1), "w": round(w, 1), "h": round(h, 1), "refined": True}

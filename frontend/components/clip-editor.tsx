@@ -178,7 +178,9 @@ function LookTab({ st, set }: { st: ClipSettings; set: (p: any) => void }) {
             <Slider label="Face area (share of screen)" value={st.facecam?.share ?? 0.4} min={0.25} max={0.6} step={0.01} onChange={(v) => set({ facecam: { share: v } })} />
             <div className="grid grid-cols-2 gap-2">{[["fit", "Show full content (blurred sides)"], ["fill", "Fill area (crop sides)"]].map(([id, l]) => (
               <button key={id} onClick={() => set({ facecam: { content: id } })} className={`rounded-md border px-2 py-1.5 text-xs ${(st.facecam?.content ?? "fit") === id ? "border-primary bg-primary/10 text-primary" : "border-input"}`}>{l}</button>))}</div>
-            <Switch label="Blur the facecam inside the lower content" checked={st.facecam?.hide ?? true} onChange={(v) => set({ facecam: { hide: v } })} />
+            <Switch label="Cut the facecam out of the lower content (no second face)" checked={st.facecam?.hide ?? true} onChange={(v) => set({ facecam: { hide: v } })} />
+            <div><Label>Caption placement</Label><Select value={st.facecam?.caption ?? "face"} onChange={(e) => set({ facecam: { caption: e.target.value } })}>
+              <option value="face">On the face panel (keeps gameplay clear)</option><option value="seam">On the seam between face and content</option><option value="bottom">Bottom of the screen</option></Select></div>
             <p className="text-xs text-muted-foreground">Used only when a small face overlay is detected in the video; otherwise the normal face-follow crop is used and the export report says so.</p>
           </div>
         )}
