@@ -36,7 +36,8 @@ def _download(opts: dict, url: str) -> None:
             last = e
             errors.append(str(e))
             msg = str(e).lower()
-            if any(k in msg for k in ("private video", "removed", "does not exist", "copyright", "members-only", "live event")):
+            # retrying with other clients cannot fix these, and hammering YouTube during a bot check prolongs the block
+            if any(k in msg for k in ("private video", "removed", "does not exist", "copyright", "members-only", "live event", "not a bot")):
                 break  # retrying with another client cannot fix these
             log.warning("yt-dlp attempt %d (%s) failed: %s", i + 1, clients or "default", str(e)[:200])
             time.sleep(1.5)
