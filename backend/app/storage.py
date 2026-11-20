@@ -19,6 +19,38 @@ def _size(p: Path) -> int:
         return 0
 
 
+def _model_files(d: Path) -> set:
+    """Real files behind a Hugging Face model folder. Newer caches keep big weights in a shared blobs folder and leave only links here."""
+    out = set()
+    for f in d.rglob("*"):
+        try:
+            r = Path(f.resolve()) if f.is_symlink() else f
+            if r.is_file():
+                out.add(r)
+        except OSError:
+            continue
+    return out
+
+
+def _model_dirs() -> list:
+    cache = Path.home() / ".cache" / "huggingface" / "hub"
+    if not cache.exists():
+        return []
+    return sorted(list(cache.glob("models--Systran--faster-whisper-*")) + list(cache.glob("models--mlx-community--whisper-*")))
+
+
+def _delete_model(name: str) -> None:
+    dirs = _model_dirs()
+    target = next((d for d in dirs if d.name == name), None)
+    if not target:
+        return
+    mine = _model_files(target)
+    shared = set().union(*[_model_files(d) for d in dirs if d != target]) if len(dirs) > 1 else set()
+    shutil.rmtree(target, ignore_errors=True)
+    for f in mine - shared:  # free the real files, but never one another model still links to
+        f.unlink(missing_ok=True)
+
+
 def _active_projects() -> set:
     return {r["project_id"] for r in db.many("SELECT project_id FROM jobs WHERE status IN ('queued','running')") if r["project_id"]}
 
@@ -60,10 +92,10 @@ def items() -> list:
     for a in sorted(config.ASSETS_DIR.glob("*")):
         out.append({"id": f"global:asset:{a.name}", "group": "App data", "project_id": None, "kind": "asset", "label": f"Audio file {a.name}", "detail": "music / sound effect you uploaded",
                     "bytes": _size(a), "note": "Clips that use it will render without it.", "danger": False, "busy": False})
-    cache = Path.home() / ".cache" / "huggingface" / "hub"
-    for m in (sorted(list(cache.glob("models--Systran--faster-whisper-*")) + list(cache.glob("models--mlx-community--whisper-*"))) if cache.exists() else []):
-        out.append({"id": f"global:model:{m.name}", "group": "Speech models", "project_id": None, "kind": "model", "label": f"Speech model {m.name.split('--')[-1]}" + (" (Apple GPU)" if "mlx-community" in m.name else ""), "detail": "downloaded once from Hugging Face",
-                    "bytes": _size(m), "note": "Needed for transcription. It downloads again the next time you process a video.", "danger": False, "busy": False})
+    for m in _model_dirs():
+        out.append({"id": f"global:model:{m.name}", "group": "Speech models", "project_id": None, "kind": "model",
+                    "label": f"Speech model {m.name.split('--')[-1]}" + (" (Apple GPU)" if "mlx-community" in m.name else ""), "detail": "downloaded once from Hugging Face",
+                    "bytes": sum(f.stat().st_size for f in _model_files(m)), "note": "Needed for transcription. It downloads again the next time you process a video.", "danger": False, "busy": False})
     for z in sorted(Path(tempfile.gettempdir()).glob("tmp*.zip")):
         out.append({"id": f"global:zip:{z.name}", "group": "Leftovers", "project_id": None, "kind": "zip", "label": f"Unfinished bundle {z.name}", "detail": str(z.parent),
                     "bytes": _size(z), "note": "Left behind by an interrupted bundle download. Safe to delete.", "danger": False, "busy": False})
@@ -128,7 +160,7 @@ def _delete_one(it: dict) -> None:
     elif kind == "asset":
         (config.ASSETS_DIR / it["id"].split(":", 2)[2]).unlink(missing_ok=True)
     elif kind == "model":
-        shutil.rmtree(Path.home() / ".cache" / "huggingface" / "hub" / it["id"].split(":", 2)[2], ignore_errors=True)
+        _delete_model(it["id"].split(":", 2)[2])
     elif kind == "zip":
         (Path(tempfile.gettempdir()) / it["id"].split(":", 2)[2]).unlink(missing_ok=True)
 
