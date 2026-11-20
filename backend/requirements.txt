@@ -8,5 +8,5 @@ pydantic>=2
 httpx>=0.27
 pillow>=10
 youtube-transcript-api>=1.0
-yt-dlp>=2025.1
+yt-dlp[default]>=2025.1
 av>=14,<17

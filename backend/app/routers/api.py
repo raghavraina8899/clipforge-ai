@@ -268,16 +268,7 @@ class YT(BaseModel):
     max_dur: Optional[float] = None
 
 
-@router.post("/projects/youtube")
-def add_youtube(b: YT):
-    try:
-        info = sources.youtube_info(b.url)
-    except ValueError as e:
-        err(400, str(e))
-    prefs = {k: v for k, v in (("min_dur", b.min_dur), ("max_dur", b.max_dur)) if v}
-    pid = new_project(info["title"] or f"YouTube {info['video_id']}", "youtube", source_url=b.url, status="processing",
-                      meta={"title": info["title"], "author": info["author"], "video_id": info["video_id"], "warning": info.get("warning", ""), "yt_authorized": bool(b.authorized)}, prefs=prefs)
-
+def youtube_job(pid: str, info: dict, url: str, authorized: bool):
     def fn(ctx):
         P = pipeline.paths(pid)
         ctx.update("Reading video information", 10)
@@ -291,13 +282,13 @@ def add_youtube(b: YT):
         ctx.update("Fetching public captions", 35)
         t = sources.youtube_transcript(info["video_id"])
         meta = db.one("SELECT meta FROM projects WHERE id=?", (pid,))["meta"]
-        if not t["ok"] and b.authorized:
+        if not t["ok"] and authorized:
             # no public captions: fetch audio only (temporary), transcribe locally, then delete it
             from ..services import transcribe, ytdl
             ctx.update("Downloading audio for analysis", 40, f"{t['reason']} Fetching audio only (temporary).")
             work = P["dir"] / "tmp_audio"
             try:
-                af = ytdl.download_audio(b.url, work, lambda p: ctx.update("Downloading audio for analysis", 40 + p * 0.15, f"Downloading audio {p:.0f}%"), lambda: ctx.cancelled.is_set())
+                af = ytdl.download_audio(url, work, lambda p: ctx.update("Downloading audio for analysis", 40 + p * 0.15, f"Downloading audio {p:.0f}%"), lambda: ctx.cancelled.is_set())
                 wav = work / "audio.wav"
                 ffmpeg.run(["-i", af, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav])
                 dur = ffmpeg.probe(af)["duration"] if af.suffix != ".wav" else 0
@@ -329,9 +320,23 @@ def add_youtube(b: YT):
         meta["duration"] = round(t["segments"][-1]["end"], 1) if t["segments"] else 0
         db.update("projects", pid, meta=meta)
         pipeline.run_analysis(pid, ctx, 55, 100)
-        db.update("projects", pid, status="ready" if b.authorized else "needs_video", language=t["language"][:2],
+        db.update("projects", pid, status="ready" if authorized else "needs_video", language=t["language"][:2],
                   analysis={**db.one("SELECT analysis FROM projects WHERE id=?", (pid,))["analysis"], "access": {"transcript": True, "reason": ""}})
         return {"transcript": True}
+    return fn
+
+
+@router.post("/projects/youtube")
+def add_youtube(b: YT):
+    try:
+        info = sources.youtube_info(b.url)
+    except ValueError as e:
+        err(400, str(e))
+    prefs = {k: v for k, v in (("min_dur", b.min_dur), ("max_dur", b.max_dur)) if v}
+    pid = new_project(info["title"] or f"YouTube {info['video_id']}", "youtube", source_url=b.url, status="processing",
+                      meta={"title": info["title"], "author": info["author"], "video_id": info["video_id"], "warning": info.get("warning", ""), "yt_authorized": bool(b.authorized)}, prefs=prefs)
+
+    fn = youtube_job(pid, info, b.url, bool(b.authorized))
     return {"project_id": pid, "job_id": jobs.submit("analyze", fn, project_id=pid), "info": info,
             "access": ("You confirmed you may use this video: ClipForge will download only each clip's time range when you render it, then delete it." if b.authorized else "Without confirming you own this video, ClipForge reads metadata and public captions only (text suggestions). Confirm permission or upload the file to render video clips.")}
 
@@ -341,6 +346,22 @@ class Live(BaseModel):
     name: str = ""
     authorized: bool = False
     language: str = "auto"
+
+
+@router.post("/projects/{pid}/retry")
+def retry_youtube(pid: str):
+    p = get_project(pid)
+    if p["source_type"] != "youtube":
+        err(400, "Only YouTube projects can be retried this way.")
+    if active_job(pid):
+        err(409, "Already processing.")
+    meta = p.get("meta") or {}
+    try:
+        info = sources.youtube_info(p["source_url"])
+    except ValueError as e:
+        err(400, str(e))
+    db.update("projects", pid, status="processing", error=None)
+    return {"job_id": jobs.submit("analyze", youtube_job(pid, info, p["source_url"], bool(meta.get("yt_authorized"))), project_id=pid)}
 
 
 @router.post("/projects/{pid}/authorize-download")

@@ -19,9 +19,11 @@ def _download(opts: dict, url: str) -> None:
     import time
     import yt_dlp
     last: Optional[Exception] = None
+    errors: list = []
     for i, clients in enumerate(CLIENT_SETS):
         o = dict(opts)
         o["extractor_retries"] = 3
+        o["js_runtimes"] = {"node": {}, "deno": {}}  # solve YouTube's JS challenges with whichever is installed
         if clients:
             o["extractor_args"] = {"youtube": {"player_client": clients}}
         try:
@@ -32,28 +34,40 @@ def _download(opts: dict, url: str) -> None:
             raise
         except Exception as e:  # noqa: BLE001
             last = e
+            errors.append(str(e))
             msg = str(e).lower()
             if any(k in msg for k in ("private video", "removed", "does not exist", "copyright", "members-only", "live event")):
                 break  # retrying with another client cannot fix these
             log.warning("yt-dlp attempt %d (%s) failed: %s", i + 1, clients or "default", str(e)[:200])
             time.sleep(1.5)
+    # report the most informative failure, not just the last one
+    for key in ("not a bot", "private video", "sign in", "live event"):
+        hit = next((m for m in errors if key in m.lower()), None)
+        if hit:
+            raise DownloadError(_friendly(hit))
     raise DownloadError(_friendly(str(last)))
 
 
 def _friendly(msg: str) -> str:
     m = msg.lower()
-    if "sign in" in m or "age" in m and "restrict" in m or "login" in m:
-        return "This video requires a login or age verification. ClipForge only downloads public videos and will not bypass that."
-    if "private" in m:
+    if "not a bot" in m:
+        return ("YouTube is asking this network to prove it is not a bot, so it blocked the download (your browser works because it is signed in). "
+                "This usually passes after waiting 30-60 minutes without retrying. Updating yt-dlp or switching network (e.g. a phone hotspot) can also help.")
+    if "private video" in m or "this video is private" in m:
         return "This video is private."
-    if "unavailable" in m or "removed" in m or "not available" in m:
+    if "sign in" in m or "login" in m or ("age" in m and "restrict" in m):
+        return "This video requires a login or age verification. ClipForge only downloads public videos and will not bypass that."
+    if "requested format is not available" in m:
+        return ("YouTube offered no downloadable format for this video right now. The usual causes are YouTube's bot check or an outdated yt-dlp "
+                "(update with: backend/.venv/bin/pip install -U 'yt-dlp[default]'). Try again later.")
+    if "video unavailable" in m or "has been removed" in m or "not available in your country" in m or "blocked it" in m:
         return "This video is unavailable (removed, region-locked or blocked)."
-    if "live" in m and ("is live" in m or "live event" in m):
+    if "live event" in m or "is live" in m:
         return "This is a live broadcast. Use the live-stream recorder instead, or wait for the replay."
     if "needs to be reloaded" in m:
-        return "YouTube refused the request ('page needs to be reloaded'). ClipForge retried with other clients; update yt-dlp (pip install -U yt-dlp) or try again later."
+        return "YouTube refused the request ('page needs to be reloaded'). Try again in a few minutes."
     if "javascript" in m or "js runtime" in m or "n challenge" in m:
-        return "YouTube extraction needs a JavaScript runtime (install Node.js or Deno) and an up-to-date yt-dlp."
+        return "YouTube extraction needs a JavaScript runtime (Node.js or Deno) and the yt-dlp-ejs package. Run ./start.sh again to install it."
     if "http error 429" in m or "too many requests" in m:
         return "YouTube is rate-limiting this network. Try again later."
     return f"Download failed: {msg.strip().splitlines()[-1][:300] if msg.strip() else 'unknown error'}"

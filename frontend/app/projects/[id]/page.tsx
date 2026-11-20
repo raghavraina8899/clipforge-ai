@@ -119,7 +119,11 @@ export default function ProjectPage() {
           <p className="mt-2 text-xs text-muted-foreground">The first transcription downloads the speech model once (needs internet); later runs are offline. Large videos take a while: progress above is measured, not estimated.</p>
         </Card>
       )}
-      {p.status === "error" && !busy && <div className="mb-5"><Notice kind="error"><b>Processing failed.</b> {p.error}</Notice></div>}
+      {p.status === "error" && !busy && (
+        <div className="mb-5 space-y-3"><Notice kind="error"><b>Processing failed.</b> {p.error}</Notice>
+          {p.source_type === "youtube" && <Button variant="secondary" onClick={async () => { try { const r = await api<{ job_id: string }>(`/projects/${id}/retry`, { method: "POST", body: {} }); setJobId(r.job_id); refresh(); } catch (e: any) { setErr(e.message); } }}><RefreshCw className="h-4 w-4" />Try again</Button>}
+        </div>
+      )}
       {p.analysis?.note && !busy && <div className="mb-5"><Notice kind="warn">{p.analysis.note}</Notice></div>}
       {p.analysis?.summary && !busy && <p className="mb-5 text-sm text-muted-foreground"><span className="font-medium text-foreground">Summary: </span>{p.analysis.summary}</p>}
 
