@@ -4,24 +4,61 @@ Free, local AI video clipper. Give it a video you own → it transcribes the spe
 and exports watermark-free vertical clips with word-timed animated captions, smart face framing and optional enhancements.
 Everything runs on your computer: no subscription, no cloud, no paid API required.
 
-## Run it
+## Quick start (copy and paste)
+
+### Mac (easiest)
+Open the **Terminal** app and run these three lines, one at a time:
 
 ```bash
+git clone https://github.com/raghavraina8899/clipforge-ai.git
+cd clipforge-ai
+./setup-mac.sh
+```
+
+`setup-mac.sh` installs whatever is missing (Homebrew, Python, Node, FFmpeg), then starts the app and opens
+**http://localhost:3000** in your browser. The first run takes several minutes (downloads). Nothing else to configure.
+
+**Next time**, just open Terminal and run:
+
+```bash
+cd clipforge-ai
 ./start.sh
 ```
 
-First run installs everything (Python venv, Node packages, free fonts) and builds the UI. Then open <http://localhost:3000>
-(it opens automatically on macOS). `Ctrl+C` stops both servers.
+Leave that Terminal window open while you use the app. Press `Ctrl+C` in it to stop.
 
-**Prerequisites** (the script checks them and tells you what is missing):
+> No `git`? Run `xcode-select --install` once, or use the green **Code → Download ZIP** button on GitHub, unzip it, then `cd` into the folder.
+
+### Linux (Ubuntu/Debian)
+```bash
+sudo apt update && sudo apt install -y git python3 python3-venv nodejs npm ffmpeg curl
+git clone https://github.com/raghavraina8899/clipforge-ai.git
+cd clipforge-ai
+./start.sh
+```
+(Node 18+ and Python 3.10+ are needed; if `apt` gives older versions use nodejs.org / `deadsnakes`.)
+
+### Windows
+Not supported directly. Install **WSL** (Ubuntu) and follow the Linux steps inside it, then open http://localhost:3000 in your Windows browser.
+
+### What to expect
+* Everything runs on your computer. No account, no API key, no subscription.
+* The first time you process a video, a speech model (~480 MB) downloads once; after that it works offline (except YouTube-URL mode).
+* Your videos and projects stay in the `data/` folder next to the app.
+* If something fails the app shows the reason; see Troubleshooting below. Logs: `data/logs/clipforge.log`.
+
+## Run it (details)
+
+`./start.sh` checks prerequisites, installs Python/Node packages and fonts on first run, builds the interface and starts both servers.
+
+**Prerequisites** (`setup-mac.sh` handles these on a Mac):
 
 | Need | macOS | Linux |
 |---|---|---|
-| Python 3.9+ | preinstalled / `brew install python` | `apt install python3 python3-venv` |
+| Python 3.10+ (3.12 recommended) | `brew install python@3.12` | `apt install python3 python3-venv` |
 | Node.js 18+ | `brew install node` | nodejs.org |
 | FFmpeg **with libass** (captions) | `brew install ffmpeg-full` (plain `ffmpeg` has no `subtitles` filter) | `apt install ffmpeg` |
 
-The first transcription downloads the Whisper model once from Hugging Face (small ≈ 480 MB); after that it is offline.
 Set `CLIPFORGE_DEV=1 ./start.sh` for development mode (hot reload).
 
 ## Workflow
@@ -63,6 +100,8 @@ Logs: `data/logs/clipforge.log`. To add a caption preset edit `PRESETS` in `back
 ## Troubleshooting
 
 * *"FFmpeg has no subtitles filter"* → `brew uninstall ffmpeg && brew install ffmpeg-full`.
-* *Port in use* → another ClipForge/dev server is running on 8000 or 3000.
+* *Port in use* → another ClipForge/dev server is running on 8000 or 3000. Close the other Terminal window running it, or restart your Mac.
+* *"permission denied" running a script* → run `chmod +x setup-mac.sh start.sh scripts/fetch_fonts.sh` once.
+* *Page says it cannot connect* → the Terminal running `./start.sh` was closed; start it again.
 * *Transcription fails on first run* → needs internet once to fetch the Whisper model.
 * *Hindi captions look wrong* → use Whisper `small` or larger (AI Settings); fonts without Devanagari fall back to a system font.
