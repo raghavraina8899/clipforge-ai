@@ -170,16 +170,39 @@ class ScaledCtx:
 
 
 def cleanup_source(pid: str) -> bool:
-    """Delete the downloaded source video (and its preview proxy). Exports, transcript and clips are kept."""
+    """Delete the downloaded / uploaded copy of the source video (and its preview proxy). Exports, transcript and clips are kept.
+    Live recordings are never deleted: that file is the only copy of the footage."""
     proj = db.one("SELECT * FROM projects WHERE id=?", (pid,))
-    if not proj or proj["source_type"] != "youtube" or not proj.get("video_path"):
+    if not proj or proj["source_type"] not in ("youtube", "upload") or not proj.get("video_path"):
         return False
     P = paths(pid)
     Path(proj["video_path"]).unlink(missing_ok=True)
     P["proxy"].unlink(missing_ok=True)
     shutil.rmtree(P["thumbs"], ignore_errors=True)
+    shutil.rmtree(P["dir"] / "preview", ignore_errors=True)
+    shutil.rmtree(P["work"], ignore_errors=True)
     db.update("projects", pid, video_path=None, proxy_path=None, meta={**(proj.get("meta") or {}), "source_deleted": True})
     return True
+
+
+def delete_exports(pid: str, clip_ids: Optional[list] = None) -> int:
+    """Delete exported files (mp4/srt/thumbnails) from disk and forget them; clip definitions stay. Returns bytes freed."""
+    P = paths(pid)
+    freed = 0
+    for c in db.many("SELECT id, exports FROM clips WHERE project_id=?", (pid,)):
+        if clip_ids is not None and c["id"] not in clip_ids:
+            continue
+        for e in c["exports"] or []:
+            for name in (e.get("file"), e.get("srt")):
+                f = P["exports"] / name if name else None
+                if f and f.exists():
+                    freed += f.stat().st_size
+                    f.unlink()
+        for t in P["exports"].glob(f"thumb-{c['id'][:6]}-*.png") if P["exports"].exists() else []:
+            freed += t.stat().st_size
+            t.unlink()
+        db.update("clips", c["id"], exports=[])
+    return freed
 
 
 def maybe_cleanup(pid: str) -> None:

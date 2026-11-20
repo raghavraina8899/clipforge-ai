@@ -419,7 +419,9 @@ def romanize_project(pid: str):
         db.update("clips", c["id"], title=hinglish.romanize(c["title"] or ""), hook=hinglish.romanize(c["hook"] or ""),
                   caption=hinglish.romanize(c["caption"] or ""), reason=hinglish.romanize(c["reason"] or ""))
     p = get_project(pid)
-    db.update("projects", pid, analysis={**(p.get("analysis") or {}), "devanagari": False}, prefs={**(p.get("prefs") or {}), "language": "hinglish"})
+    an = dict(p.get("analysis") or {})
+    an["summary"] = hinglish.romanize(an.get("summary") or "")
+    db.update("projects", pid, analysis={**an, "devanagari": False}, prefs={**(p.get("prefs") or {}), "language": "hinglish"})
     return {"converted_words": n}
 
 
@@ -846,33 +848,50 @@ def download(pid: str, file: str):
 
 
 @router.get("/projects/{pid}/zip")
-def zip_project(pid: str, clips: str = ""):
+def zip_project(pid: str, clips: str = "", clean_source: int = 0, clean_exports: int = 0):
+    """One bundle folder: videos/, subtitles/, thumbnails/, text/ and INDEX.txt, clips numbered in story order.
+    Optional cleanup runs only AFTER the file has been fully sent."""
+    from starlette.background import BackgroundTask
     p = get_project(pid)
     want = set(filter(None, clips.split(",")))
     rows = [c for c in db.many("SELECT * FROM clips WHERE project_id=? ORDER BY start", (pid,)) if not want or c["id"] in want]
     ex = PROJECTS_DIR / pid / "exports"
     tmp = Path(tempfile.mkstemp(suffix=".zip")[1])
-    n = 0
+    root = re.sub(r"[^A-Za-z0-9]+", "-", p["name"]).strip("-")[:40] or "clips"
+    n, index, included = 0, [], []
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:
         for c in rows:
             latest = [e for e in (c["exports"] or []) if (ex / e["file"]).exists()]
             if not latest:
                 continue
             e = latest[-1]
-            z.write(ex / e["file"], f"clips/{e['file']}")
-            if (ex / e["srt"]).exists():
-                z.write(ex / e["srt"], f"subtitles/{e['srt']}")
             n += 1
+            base = f"{n:02d}-" + (re.sub(r"[^A-Za-z0-9]+", "-", c["title"]).strip("-")[:50] or "clip")
+            z.write(ex / e["file"], f"{root}/videos/{base}.mp4")
+            if (ex / e["srt"]).exists():
+                z.write(ex / e["srt"], f"{root}/subtitles/{base}.srt")
             for t in ex.glob(f"thumb-{c['id'][:6]}-*.png"):
-                z.write(t, f"thumbnails/{t.name}")
+                z.write(t, f"{root}/thumbnails/{base}-{t.name}")
             if c.get("social"):
-                s = c["social"]
-                z.writestr(f"text/{Path(e['file']).stem}.txt", "TITLES\n" + "\n".join(s.get("titles", [])) + "\n\nCAPTIONS\n" + "\n\n".join(s.get("captions", []))
-                           + "\n\nHASHTAGS\n" + " ".join(s.get("hashtags", [])) + "\n\nDESCRIPTION\n" + str(s.get("description", "")))
+                sc = c["social"]
+                z.writestr(f"{root}/text/{base}.txt", "TITLES\n" + "\n".join(sc.get("titles", [])) + "\n\nCAPTIONS\n" + "\n\n".join(sc.get("captions", []))
+                           + "\n\nHASHTAGS\n" + " ".join(sc.get("hashtags", [])) + "\n\nDESCRIPTION\n" + str(sc.get("description", "")))
+            index.append(f"{base}.mp4  |  {c['title']}  |  {c['start']:.1f}s - {c['end']:.1f}s in the original  |  {e['width']}x{e['height']}")
+            included.append(c["id"])
+        if n:
+            z.writestr(f"{root}/INDEX.txt", f"{p['name']}\n{n} clips, in order\n\n" + "\n".join(index) + "\n")
     if n == 0:
         tmp.unlink(missing_ok=True)
         err(400, "Nothing to download yet: export at least one clip first.")
-    return FileResponse(tmp, filename=f"{re.sub(r'[^A-Za-z0-9]+', '-', p['name'])[:40] or 'clips'}.zip", media_type="application/zip")
+
+    def after():
+        tmp.unlink(missing_ok=True)
+        if clean_exports:
+            pipeline.delete_exports(pid, included)
+        if clean_source:
+            pipeline.cleanup_source(pid)
+
+    return FileResponse(tmp, filename=f"{root}.zip", media_type="application/zip", background=BackgroundTask(after))
 
 
 # ================================================================ jobs

@@ -22,6 +22,9 @@ export default function ProjectPage() {
   const [showRegen, setShowRegen] = useState(false);
   const [dur, setDur] = useState<DurationValue>({ preset: "45-60", min: 45, max: 60 });
   const [maxClips, setMaxClips] = useState(8);
+  const [bundleOpts, setBundleOpts] = useState({ delSource: true, delExports: true });
+  const [bundling, setBundling] = useState(false);
+  const [bundleMsg, setBundleMsg] = useState("");
   const [regenMode, setRegenMode] = useState<"moments" | "series">("moments");
   const [regenPart, setRegenPart] = useState(60);
   const fonts = useFonts();
@@ -90,6 +93,40 @@ export default function ProjectPage() {
   };
   const rename = async (name: string) => { if (name.trim() && name !== p.name) { await api(`/projects/${id}`, { method: "PATCH", body: { name } }); refresh(); } };
   const busy = p.status === "processing" || !!job;
+  const exportedSelected = selected.filter((c) => c.exports.length);
+  const downloadBundle = (ids: string[]) => {
+    const q = new URLSearchParams({ clips: ids.join(",") });
+    if (bundleOpts.delSource) q.set("clean_source", "1");
+    if (bundleOpts.delExports) q.set("clean_exports", "1");
+    window.location.href = `${API}/api/projects/${id}/zip?${q}`;
+    [4000, 15000].forEach((t) => setTimeout(refresh, t));
+  };
+  const confirmCleanup = () => !(bundleOpts.delSource || bundleOpts.delExports) || confirm(
+    `After the bundle download finishes, ClipForge will delete from this computer:\n${bundleOpts.delSource ? "• the downloaded/uploaded video copy\n" : ""}${bundleOpts.delExports ? "• the exported clip files of this project\n" : ""}\nThe ZIP in your Downloads folder will then be the only copy of the clips. Continue?`);
+  const renderAllAndDownload = async () => {
+    if (!confirmCleanup()) return;
+    setBundleMsg(""); setBundling(true);
+    try {
+      const todo = selected.filter((c) => !c.exports.length);
+      if (todo.length) {
+        const r = await api<{ jobs: { clip_id: string; job_id: string }[] }>(`/projects/${id}/render`, { body: { clip_ids: todo.map((c) => c.id) } });
+        setRenders((x) => ({ ...x, ...Object.fromEntries(r.jobs.map((j) => [j.clip_id, j.job_id])) }));
+        for (const j of r.jobs) {
+          setBundleMsg(`Rendering clips… (${r.jobs.indexOf(j) + 1}/${r.jobs.length})`);
+          for (;;) {
+            const st = await api<Job>(`/jobs/${j.job_id}`);
+            if (st.status === "done") break;
+            if (st.status === "error" || st.status === "cancelled") throw new Error(st.error || "A clip failed to render, so the bundle was not downloaded.");
+            await new Promise((res) => setTimeout(res, 1200));
+          }
+        }
+      }
+      await refresh();
+      setBundleMsg("Bundle downloading… check your Downloads folder.");
+      downloadBundle(selected.map((c) => c.id));
+    } catch (e: any) { setErr(e.message); setBundleMsg(""); }
+    setBundling(false);
+  };
   const totalExports = clips.reduce((n, c) => n + c.exports.length, 0);
 
   return (
@@ -110,7 +147,6 @@ export default function ProjectPage() {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setShowRegen((v) => !v)} disabled={busy}><RefreshCw className="h-4 w-4" />Regenerate suggestions</Button>
             {p.has_video && p.source_type === "youtube" && <Button variant="outline" onClick={async () => { if (confirm("Delete the downloaded video to free disk space? Your clips, transcript and exports stay. Further editing or exporting needs a re-download.")) { try { await api(`/projects/${id}/source`, { method: "DELETE" }); refresh(); } catch (e: any) { setErr(e.message); } } }}><Trash2 className="h-4 w-4" />Delete downloaded video</Button>}
-            {totalExports > 0 && <a href={`${API}/api/projects/${id}/zip`}><Button variant="secondary"><Archive className="h-4 w-4" />Download all (ZIP)</Button></a>}
           </div>
         )}
       </div>
@@ -151,6 +187,24 @@ export default function ProjectPage() {
       )}
 
       {!clips.length && !busy && p.status !== "error" && p.analysis && <Card className="p-8 text-center text-sm text-muted-foreground">No clip suggestions yet. Try a different clip length, or add a clip manually.<div className="mt-3"><Button variant="secondary" onClick={addClip}><Plus className="h-4 w-4" />Add custom clip</Button></div></Card>}
+
+      {clips.length > 0 && !busy && (
+        <Card className="mb-5 space-y-3 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h3 className="text-sm font-semibold">Bundle: all {p.analysis?.mode === "series" ? "parts" : "clips"} in one folder</h3>
+              <p className="mt-1 text-xs text-muted-foreground">One ZIP with <code>videos/</code>, <code>subtitles/</code>, <code>thumbnails/</code>, <code>text/</code> and an <code>INDEX.txt</code>, numbered in order. Uses the clips ticked below ({selected.length}).</p></div>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={!selected.length || !p.can_render || bundling} onClick={renderAllAndDownload}>{bundling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}Render all &amp; download bundle</Button>
+              <Button variant="secondary" disabled={!exportedSelected.length || bundling} onClick={() => { if (confirmCleanup()) downloadBundle(exportedSelected.map((c) => c.id)); }}><Download className="h-4 w-4" />Download bundle ({exportedSelected.length} exported)</Button>
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={bundleOpts.delSource} onChange={(e) => setBundleOpts({ ...bundleOpts, delSource: e.target.checked })} />After the download, delete the downloaded / uploaded video copy (live recordings are never deleted).</label>
+            <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={bundleOpts.delExports} onChange={(e) => setBundleOpts({ ...bundleOpts, delExports: e.target.checked })} />After the download, delete the exported clip files from this computer to free space.</label>
+          </div>
+          {bundleMsg && <p className="text-sm text-primary">{bundleMsg}</p>}
+        </Card>
+      )}
 
       {clips.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
