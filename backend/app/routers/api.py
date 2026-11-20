@@ -440,7 +440,7 @@ def add_youtube(b: YT):
 
     fn = youtube_job(pid, info, b.url, bool(b.authorized))
     return {"project_id": pid, "job_id": jobs.submit("analyze", fn, project_id=pid), "info": info,
-            "access": ("You confirmed you may use this video: Frameflow will download only each clip's time range when you render it, then delete it." if b.authorized else "Without confirming you own this video, Frameflow reads metadata and public captions only (text suggestions). Confirm permission or upload the file to render video clips.")}
+            "access": ("You confirmed you may use this video: HookHunt will download only each clip's time range when you render it, then delete it." if b.authorized else "Without confirming you own this video, HookHunt reads metadata and public captions only (text suggestions). Confirm permission or upload the file to render video clips.")}
 
 
 class Live(BaseModel):

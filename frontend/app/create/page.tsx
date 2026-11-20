@@ -22,7 +22,7 @@ export default function Create() {
   const common: Common = { dur, lang, maxClips, mode: goal, partLen, rangeStart: parseTime(rs) ?? 0, rangeEnd: parseTime(re) ?? 0 };
   return (
     <div>
-      <PageHeader title="Create New Clips" subtitle="Provide a video you own or have permission to use. Frameflow analyzes the speech, finds the best moments and prepares clips with captions." />
+      <PageHeader title="Create New Clips" subtitle="Provide a video you own or have permission to use. HookHunt analyzes the speech, finds the best moments and prepares clips with captions." />
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
       <div>
       <Tabs<Mode> value={mode} onChange={setMode} tabs={[
@@ -69,12 +69,12 @@ export default function Create() {
       <aside className="space-y-4 xl:sticky xl:top-6">
         <Card><CardHeader><CardTitle>How it works</CardTitle></CardHeader><CardContent>
           <ol className="space-y-3 text-sm">
-            {[["Add a video", "Upload a file, paste a YouTube link, or record an authorized live stream."], ["Frameflow listens", "It transcribes the speech locally with word-level timing. Nothing leaves your computer."], ["Pick your clips", "Best moments, or the whole story as Part 1, Part 2… Edit captions, framing and hooks."], ["Export", "Watermark-free MP4s, subtitles and one tidy bundle to download."]].map(([t, d], i) => (
+            {[["Add a video", "Upload a file, paste a YouTube link, or record an authorized live stream."], ["HookHunt listens", "It transcribes the speech locally with word-level timing. Nothing leaves your computer."], ["Pick your clips", "Best moments, or the whole story as Part 1, Part 2… Edit captions, framing and hooks."], ["Export", "Watermark-free MP4s, subtitles and one tidy bundle to download."]].map(([t, d], i) => (
               <li key={t} className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-cyan text-xs font-semibold text-white shadow-[0_0_12px_hsl(var(--primary)/.5)]">{i + 1}</span><div><div className="font-medium">{t}</div><div className="text-xs text-muted-foreground">{d}</div></div></li>
             ))}
           </ol>
         </CardContent></Card>
-        <p className="px-1 text-xs text-muted-foreground">Only process videos you own or have permission to use. Frameflow never bypasses logins, DRM or platform restrictions.</p>
+        <p className="px-1 text-xs text-muted-foreground">Only process videos you own or have permission to use. HookHunt never bypasses logins, DRM or platform restrictions.</p>
       </aside>
       </div>
     </div>
@@ -122,7 +122,7 @@ function UploadPane(c: Common) {
       ) : (
         <div className="space-y-3">
           <video src={preview} controls className="max-h-72 w-full rounded-md bg-black" onLoadedMetadata={(e) => { const v = e.currentTarget; setInfo({ duration: v.duration, w: v.videoWidth, h: v.videoHeight }); }}
-            onError={() => setErr("Your browser cannot preview this format, but Frameflow can usually still process it.")} />
+            onError={() => setErr("Your browser cannot preview this format, but HookHunt can usually still process it.")} />
           <div className="flex items-center justify-between text-sm">
             <span className="truncate">{file.name} · {fmtBytes(file.size)}{info ? ` · ${fmtTime(info.duration)} · ${info.w}×${info.h}` : ""}</span>
             {pct === null && <Button variant="ghost" size="sm" onClick={() => { setFile(null); setPreview(""); }}><X className="h-3.5 w-3.5" />Change</Button>}
@@ -130,7 +130,7 @@ function UploadPane(c: Common) {
         </div>
       )}
       {pct !== null && (
-        <div><JobLoader variant="upload" job={{ stage: pct < 100 ? "Uploading" : "Reading the video…", progress: pct, message: pct < 100 ? "Sending your video to Frameflow on this computer" : "Checking the file", status: "running" }} />
+        <div><JobLoader variant="upload" job={{ stage: pct < 100 ? "Uploading" : "Reading the video…", progress: pct, message: pct < 100 ? "Sending your video to HookHunt on this computer" : "Checking the file", status: "running" }} />
           <button className="mt-2 text-xs text-muted-foreground underline" onClick={() => abort.current?.()}>Cancel upload</button></div>
       )}
       {err && <Notice kind="error">{err}</Notice>}
@@ -160,7 +160,7 @@ function YouTubePane(c: Common) {
         {u && !valid && <p className="mt-1 text-xs text-warning">This does not look like a YouTube video link.</p>}</div>
       {valid && (() => { const r = ytLinkRange(u); const mine = c.rangeStart || c.rangeEnd; if ((!r.start && !r.end) || mine) return null; return (
         <Notice kind={r.end ? "ok" : "warn"}>Time range found in the link: from <b>{fmtTime(r.start)}</b> {r.end ? <>to <b>{fmtTime(r.end)}</b>. Only that part is downloaded and transcribed.</> : <>to the <b>end of the video</b>. A link start alone does not shorten the work after that point: fill in “Stop” above, or add <code>&amp;end=SECONDS</code> to the link.</>}</Notice>); })()}
-      <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={ok} onChange={(e) => setOk(e.target.checked)} />I own this video or have permission to use it. Frameflow may download it temporarily to create clips.</label>
+      <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={ok} onChange={(e) => setOk(e.target.checked)} />I own this video or have permission to use it. HookHunt may download it temporarily to create clips.</label>
       {ok && (
         <div className="space-y-2 rounded-md border p-3">
           <label className="flex items-start gap-2 text-sm"><input type="radio" className="mt-1" checked={full} onChange={() => setFull(true)} /><span><b>Download the full video once</b> (recommended). One request to YouTube; previews, thumbnails and exports then run locally and fast. Needs disk space while you work (about 1–4 GB for an hour).</span></label>
@@ -169,9 +169,9 @@ function YouTubePane(c: Common) {
         </div>
       )}
       {ok ? (
-        <Notice kind="info"><b>Fully automatic:</b> paste the link, Frameflow downloads, transcribes, finds the {c.mode === "series" ? "parts" : "best moments"} and renders them. Public videos only: no logins, no DRM bypass. Downloading videos you don’t own may break YouTube’s terms.</Notice>
+        <Notice kind="info"><b>Fully automatic:</b> paste the link, HookHunt downloads, transcribes, finds the {c.mode === "series" ? "parts" : "best moments"} and renders them. Public videos only: no logins, no DRM bypass. Downloading videos you don’t own may break YouTube’s terms.</Notice>
       ) : (
-        <Notice kind="warn"><b>Text suggestions only:</b> without the confirmation above, Frameflow reads just the title and public captions and suggests moments as text. To get actual video clips, tick the box or upload the video file instead.</Notice>
+        <Notice kind="warn"><b>Text suggestions only:</b> without the confirmation above, HookHunt reads just the title and public captions and suggests moments as text. To get actual video clips, tick the box or upload the video file instead.</Notice>
       )}
       {err && <Notice kind="error">{err}</Notice>}
       <Button size="lg" className="w-full" disabled={!valid || busy} onClick={go}>{busy ? "Checking…" : ok ? "Analyze and create video clips" : "Analyze captions (text only)"}</Button>
@@ -205,7 +205,7 @@ function LivePane(c: Common) {
       <div><Label>Stream URL (direct stream, e.g. HLS .m3u8, RTMP, RTSP, SRT)</Label><Input placeholder="https://example.com/live/stream.m3u8" value={u} onChange={(e) => setU(e.target.value)} /></div>
       <div><Label>Project name (optional)</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={ok} onChange={(e) => setOk(e.target.checked)} />I own this stream or have permission to record and clip it.</label>
-      <Notice kind="info">Frameflow records only direct stream addresses. It does not extract streams from website pages, and it cannot (and will not) bypass logins or DRM. Pausing stops recording: content during a pause is not captured.</Notice>
+      <Notice kind="info">HookHunt records only direct stream addresses. It does not extract streams from website pages, and it cannot (and will not) bypass logins or DRM. Pausing stops recording: content during a pause is not captured.</Notice>
       {err && <Notice kind="error">{err}</Notice>}
       <Button size="lg" className="w-full" disabled={!u || !ok || busy} onClick={create}>Prepare recorder</Button>
     </div>

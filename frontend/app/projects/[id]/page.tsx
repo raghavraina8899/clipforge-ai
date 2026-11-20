@@ -104,7 +104,7 @@ export default function ProjectPage() {
     [4000, 15000].forEach((t) => setTimeout(refresh, t));
   };
   const confirmCleanup = () => !(bundleOpts.delSource || bundleOpts.delExports) || confirm(
-    `After the bundle download finishes, Frameflow will delete from this computer:\n${bundleOpts.delSource ? "• the downloaded/uploaded video copy\n" : ""}${bundleOpts.delExports ? "• the exported clip files of this project\n" : ""}\nThe ZIP in your Downloads folder will then be the only copy of the clips. Continue?`);
+    `After the bundle download finishes, HookHunt will delete from this computer:\n${bundleOpts.delSource ? "• the downloaded/uploaded video copy\n" : ""}${bundleOpts.delExports ? "• the exported clip files of this project\n" : ""}\nThe ZIP in your Downloads folder will then be the only copy of the clips. Continue?`);
   const renderAllAndDownload = async () => {
     if (!confirmCleanup()) return;
     setBundleMsg(""); setBundling(true); bundleStop.current = false; bundleJobs.current = [];
@@ -276,7 +276,7 @@ function AttachVideo({ project, onStarted }: { project: Project; onStarted: (job
       {project.source_type === "youtube" && (
         <p className="text-sm text-muted-foreground">
           {acc?.transcript ? "Suggestions above come from YouTube’s public captions (timing is estimated). " : acc?.reason ? `${acc.reason} ` : ""}
-          Nothing has been downloaded: Frameflow only read public metadata and captions. To get video clips, either confirm below that you may use this video (clips are then fetched one segment at a time and deleted after rendering), or upload the file yourself.
+          Nothing has been downloaded: HookHunt only read public metadata and captions. To get video clips, either confirm below that you may use this video (clips are then fetched one segment at a time and deleted after rendering), or upload the file yourself.
         </p>
       )}
       {project.source_type === "youtube" && project.yt_authorized && project.yt_mode === "full" && (
@@ -293,13 +293,13 @@ function AttachVideo({ project, onStarted }: { project: Project; onStarted: (job
       )}
       {project.source_type === "youtube" && !project.yt_authorized && (
         <div className="space-y-2 rounded-md border p-3">
-          <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={ok} onChange={(e) => setOk(e.target.checked)} />I own this video or have permission to use it, so Frameflow may download just each clip’s time range temporarily (deleted after rendering).</label>
+          <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={ok} onChange={(e) => setOk(e.target.checked)} />I own this video or have permission to use it, so HookHunt may download just each clip’s time range temporarily (deleted after rendering).</label>
           <Button disabled={!ok} onClick={async () => { try { await api(`/projects/${project.id}/authorize-download`, { body: { authorized: true } }); onStarted(""); } catch (e: any) { setErr(e.message); } }}>Enable automatic video clips</Button>
         </div>
       )}
       <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"><FileVideo className="h-4 w-4" />Choose video file<input type="file" accept="video/*,.mkv,.avi,.ts" className="hidden" onChange={(e) => go(e.target.files?.[0])} /></label>
       {pct !== null && <button className="text-xs text-muted-foreground underline" onClick={() => abortUp.current?.()}>Cancel upload</button>}
-      {pct !== null && <JobLoader variant="upload" job={{ stage: pct < 100 ? "Uploading" : "Reading the video", progress: pct, message: pct < 100 ? "Sending your file to Frameflow on this computer" : "Checking the file", status: "running" }} />}
+      {pct !== null && <JobLoader variant="upload" job={{ stage: pct < 100 ? "Uploading" : "Reading the video", progress: pct, message: pct < 100 ? "Sending your file to HookHunt on this computer" : "Checking the file", status: "running" }} />}
       {err && <Notice kind="error">{err}</Notice>}
     </Card>
   );

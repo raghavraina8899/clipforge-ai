@@ -59,7 +59,7 @@ export function SystemCheck() {
   const tone = phase === "idle" ? "idle" : phase === "running" ? "run" : bad ? "error" : warn ? "warn" : "ok";
   const label = phase === "idle" ? "—" : phase === "running" ? `${Math.round((done / total) * 100)}%` : `${passed}/${total}`;
   const sub = phase === "idle" ? "not run yet" : phase === "running" ? `step ${Math.min(done + 1, total)} of ${total}` : bad ? "need fixing" : warn ? "with notes" : "all passed";
-  const verdict = phase === "done" ? (bad ? `${bad} problem${bad > 1 ? "s" : ""} must be fixed before Frameflow works.` : warn ? "Everything essential works. A few optional items are worth a look." : "All checks passed. Your system is ready.") : "";
+  const verdict = phase === "done" ? (bad ? `${bad} problem${bad > 1 ? "s" : ""} must be fixed before HookHunt works.` : warn ? "Everything essential works. A few optional items are worth a look." : "All checks passed. Your system is ready.") : "";
 
   const icon = (id: string) => {
     const r = res[id];
@@ -75,7 +75,7 @@ export function SystemCheck() {
         <div className="flex flex-wrap items-center gap-5">
           <Ring pct={phase === "done" ? (passed / total) * 100 : (done / total) * 100} label={label} sub={sub} tone={tone} />
           <div className="min-w-[220px] flex-1 space-y-3">
-            <p className="text-sm text-muted-foreground">Something not working? This tests, one step at a time, everything Frameflow depends on: video tools, captions, speech recognition, YouTube support, disk space and internet. Anything wrong comes with the fix.</p>
+            <p className="text-sm text-muted-foreground">Something not working? This tests, one step at a time, everything HookHunt depends on: video tools, captions, speech recognition, YouTube support, disk space and internet. Anything wrong comes with the fix.</p>
             {phase === "running" && cur && <p className="flex items-center gap-2 text-sm font-medium text-cyan"><Loader2 className="h-4 w-4 animate-spin" />Checking: {steps.find((s) => s.id === cur)?.name}…</p>}
             {verdict && <p className={cn("text-sm font-medium", bad ? "text-danger" : warn ? "text-warning" : "text-success")}>{verdict}</p>}
             <div className="flex flex-wrap gap-2">

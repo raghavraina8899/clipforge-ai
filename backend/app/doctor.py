@@ -1,4 +1,4 @@
-"""System check: finds the usual reasons Frameflow does not work on a machine and says how to fix each one.
+"""System check: finds the usual reasons HookHunt does not work on a machine and says how to fix each one.
 Usable without the server:  backend/.venv/bin/python -m app.doctor"""
 import importlib.metadata as md
 import platform
@@ -95,7 +95,7 @@ def c_datadir():
         t.unlink()
         return _r(True, str(d))
     except OSError:
-        return _r(False, str(d), "Set FRAMEFLOW_DATA to a folder you can write to.")
+        return _r(False, str(d), "Set HOOKHUNT_DATA to a folder you can write to.")
 
 
 def c_disk():
@@ -107,7 +107,7 @@ def c_disk():
 def c_sync():
     d = str(config.DATA_DIR)
     synced = any(x in d for x in ("com~apple~CloudDocs", "/Desktop/", "/Documents/", "Dropbox", "OneDrive"))
-    return _r(not synced, "synced folder" if synced else "local folder", "Set FRAMEFLOW_DATA to a folder outside Desktop/Documents/Dropbox.", "warn")
+    return _r(not synced, "synced folder" if synced else "local folder", "Set HOOKHUNT_DATA to a folder outside Desktop/Documents/Dropbox.", "warn")
 
 
 def c_fonts():
@@ -164,7 +164,7 @@ def run_checks(network: bool = True) -> list:
 
 
 def report(network: bool = True) -> str:
-    lines = ["Frameflow diagnostic report", "=" * 28,
+    lines = ["HookHunt diagnostic report", "=" * 28,
              f"OS: {platform.platform()}", f"Python: {sys.version.split()[0]}", f"Data folder: {config.DATA_DIR}", ""]
     for c in run_checks(network):
         mark = {"ok": "OK  ", "warn": "WARN", "error": "FAIL"}[c["level"]]
@@ -184,5 +184,5 @@ if __name__ == "__main__":
         if c["fix"]:
             print(f"     → {c['fix']}")
         bad += c["level"] == "error"
-    print("\nEverything essential looks fine." if not bad else f"\n{bad} problem(s) need fixing before Frameflow works.")
+    print("\nEverything essential looks fine." if not bad else f"\n{bad} problem(s) need fixing before HookHunt works.")
     sys.exit(1 if bad else 0)

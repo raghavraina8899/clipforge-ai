@@ -6,7 +6,7 @@ const Item = ({ t, children }: { t: string; children: React.ReactNode }) => <li>
 export default function About() {
   return (
     <div>
-      <PageHeader title="About Frameflow" subtitle="A free, local tool that turns long videos into Shorts and Reels with word-timed captions. No watermark, no subscription, no cloud." />
+      <PageHeader title="About HookHunt" subtitle="A free, local tool that turns long videos into Shorts and Reels with word-timed captions. No watermark, no subscription, no cloud." />
       <div className="grid items-start gap-6 xl:grid-cols-[1.15fr_1fr]">
       <SystemCheck />
       <div className="space-y-6">
@@ -16,9 +16,9 @@ export default function About() {
         <Item t="OpenCV">detects faces and estimates the active speaker from mouth movement for smart framing.</Item>
         <Item t="Built-in analyzer">scores moments by hook, emotion, information, engagement, standalone context and ending. Works offline.</Item>
         <Item t="Gemini / Ollama (optional)">improve ranking and copy. Gemini uses your own key and its free tier has rate limits that Google sets and may change.</Item>
-        <Item t="SQLite + local files">store projects in your Frameflow data folder (outside the app folder, so cloud sync never uploads it). See the Storage page.</Item></ul></CardContent></Card>
+        <Item t="SQLite + local files">store projects in your HookHunt data folder (outside the app folder, so cloud sync never uploads it). See the Storage page.</Item></ul></CardContent></Card>
       <Card><CardHeader><CardTitle>Honest limits</CardTitle></CardHeader><CardContent><ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-        <li>YouTube links: by default only public metadata and captions are read. If you confirm you own the video or have permission, Frameflow downloads it (public videos only, no logins or DRM bypass) and deletes the download after your clips are exported. YouTube sometimes blocks automated downloads; uploading the file always works.</li>
+        <li>YouTube links: by default only public metadata and captions are read. If you confirm you own the video or have permission, HookHunt downloads it (public videos only, no logins or DRM bypass) and deletes the download after your clips are exported. YouTube sometimes blocks automated downloads; uploading the file always works.</li>
         <li>Live streams: only direct stream addresses you are authorized to use. No DRM or login bypass. Pausing stops capture.</li>
         <li>The viral score estimates how well a clip is constructed. It does not predict or guarantee performance.</li>
         <li>Face tracking uses a classic OpenCV detector: front-facing faces work best; otherwise it falls back to center framing and says so.</li>

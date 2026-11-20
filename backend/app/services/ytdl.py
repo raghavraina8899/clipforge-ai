@@ -57,7 +57,7 @@ def _friendly(msg: str) -> str:
     if "private video" in m or "this video is private" in m:
         return "This video is private."
     if "sign in" in m or "login" in m or ("age" in m and "restrict" in m):
-        return "This video requires a login or age verification. Frameflow only downloads public videos and will not bypass that."
+        return "This video requires a login or age verification. HookHunt only downloads public videos and will not bypass that."
     if "requested format is not available" in m:
         return ("YouTube offered no downloadable format for this video right now. The usual causes are YouTube's bot check or an outdated yt-dlp "
                 "(update with: backend/.venv/bin/pip install -U 'yt-dlp[default]'). Try again later.")

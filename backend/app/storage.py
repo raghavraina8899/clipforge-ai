@@ -1,4 +1,4 @@
-"""Storage manager: lists everything Frameflow keeps on disk, with sizes, and deletes only items it listed itself
+"""Storage manager: lists everything HookHunt keeps on disk, with sizes, and deletes only items it listed itself
 (ids are re-derived from the database/disk on every call, so no arbitrary path can ever be deleted)."""
 import shutil
 import tempfile

@@ -1,4 +1,4 @@
-# Frameflow
+# HookHunt
 
 Free, local AI video clipper. Give it a video you own → it transcribes the speech, finds the most engaging moments,
 and exports watermark-free vertical clips with word-timed animated captions, smart face framing and optional enhancements.
@@ -44,7 +44,7 @@ Not supported directly. Install **WSL** (Ubuntu) and follow the Linux steps insi
 ### What to expect
 * Everything runs on your computer. No account, no API key, no subscription.
 * The first time you process a video, a speech model (~480 MB) downloads once; after that it works offline (except YouTube-URL mode).
-* Your videos and projects stay on your computer, outside the app folder: `~/Library/Application Support/Frameflow` on a Mac (`~/.local/share/frameflow` on Linux), so iCloud/Dropbox never uploads them. Set `FRAMEFLOW_DATA=/some/folder` to change it. Use the **Storage** page in the app to see what is stored and free up space.
+* Your videos and projects stay on your computer, outside the app folder: `~/Library/Application Support/HookHunt` on a Mac (`~/.local/share/hookhunt` on Linux), so iCloud/Dropbox never uploads them. Set `HOOKHUNT_DATA=/some/folder` to change it. Use the **Storage** page in the app to see what is stored and free up space.
 * If something fails the app shows the reason; see Troubleshooting below. Logs: `<data folder>/logs/clipforge.log`.
 
 ## Run it (details)
@@ -64,17 +64,17 @@ Set `CLIPFORGE_DEV=1 ./start.sh` for development mode (hot reload).
 ## Workflow
 
 1. **Create New Clips** → upload a video (drag & drop, real upload progress), paste a YouTube URL, or record an authorized live stream.
-2. Frameflow probes the file, builds a 720p preview, extracts audio, transcribes (English / Hindi / auto) and scores moments. Every progress bar is measured from the real work.
+2. HookHunt probes the file, builds a 720p preview, extracts audio, transcribes (English / Hindi / auto) and scores moments. Every progress bar is measured from the real work.
 3. Pick clips (or regenerate with another length: 15–30 / 30–45 / 45–60 / 60–90 / custom), tweak start/end, captions, layout, hook, enhancements.
 4. **Render** → H.264/H.265 MP4 + SRT; download per clip or as one ZIP (clips, subtitles, thumbnails, social text).
 
 ## What is real, and what the limits are
 
-* **YouTube URLs**: by default only public metadata and captions are read (text suggestions). If you tick "I own this video or have permission to use it", Frameflow works from the URL alone. Recommended: **download the full video once** (one request), then everything runs locally on the real file (previews, thumbnails, fast exports). The download is deleted automatically once all selected clips are exported (or use "Delete downloaded video"); exports are kept. The alternative "fetch each clip separately" uses less disk but makes many requests (more likely to hit YouTube's bot check). Public videos only (no cookies/logins/DRM bypass). Downloading videos you don't own may break YouTube's terms. yt-dlp can break when YouTube changes: `backend/.venv/bin/pip install -U 'yt-dlp[default]'`.
+* **YouTube URLs**: by default only public metadata and captions are read (text suggestions). If you tick "I own this video or have permission to use it", HookHunt works from the URL alone. Recommended: **download the full video once** (one request), then everything runs locally on the real file (previews, thumbnails, fast exports). The download is deleted automatically once all selected clips are exported (or use "Delete downloaded video"); exports are kept. The alternative "fetch each clip separately" uses less disk but makes many requests (more likely to hit YouTube's bot check). Public videos only (no cookies/logins/DRM bypass). Downloading videos you don't own may break YouTube's terms. yt-dlp can break when YouTube changes: `backend/.venv/bin/pip install -U 'yt-dlp[default]'`.
 * **Series mode** (Create page → "Series of parts"): cuts the whole video, or a start/stop range, into consecutive parts of your chosen length (Part 1/N, Part 2/N…), each ending at a sentence break, with a "Part N" label shown at the start. It does not pick cliffhangers; adjust any part's end time in its editor.
 * **Live streams**: direct stream addresses only (HLS `.m3u8`, RTMP, RTSP, SRT, UDP, plain http) and you must confirm authorization. Platform page URLs (YouTube, Twitch, …) are refused; no DRM/login bypass. Pause stops capture (the paused time is not recorded). Copy-mode recording waits for the stream's next keyframe (up to 20 s).
 * **Viral score** = weighted estimate of hook, emotion, information, engagement, standalone context and ending (0–100). It is not a prediction.
-* **Analysis**: the built-in analyzer is rule-based and works offline. Optional **Gemini** (your own key) or **Ollama** (local model) improve ranking and copy; their output is validated (timestamps snapped to real sentence boundaries, scores clamped, overlaps removed) and, on any failure or quota error, Frameflow falls back to the built-in analyzer and says so.
+* **Analysis**: the built-in analyzer is rule-based and works offline. Optional **Gemini** (your own key) or **Ollama** (local model) improve ranking and copy; their output is validated (timestamps snapped to real sentence boundaries, scores clamped, overlaps removed) and, on any failure or quota error, HookHunt falls back to the built-in analyzer and says so.
 * **Gemini quotas**: Google's free tier is rate-limited, with limits that differ by model and can change; see ai.google.dev. The key is stored only in `settings.json` in the data folder (chmod 600), sent only to Google in a header, never returned to the browser or written to logs.
 * **Smart crop**: OpenCV Haar face detector + mouth-motion heuristic for the active speaker, smoothed with a dead-zone camera. Works best with front-facing faces; otherwise it falls back to center crop and reports that. (MediaPipe can be added behind `services/vision.py`; it is not required.)
 * **Resolution honesty**: a 16:9 → 9:16 crop uses only ~1/3 of the source width. If an export needs upscaling, the result states the factor. 1440p/4K are reduced unless the source really has the pixels; 60 fps is not invented from 30 fps.
@@ -104,7 +104,7 @@ Logs: `<data folder>/logs/clipforge.log`. To add a caption preset edit `PRESETS`
 **First, run the system check.** In the app: *About → Run system check* (it lists what is wrong and how to fix it, and has a *Copy diagnostic report* button to send to whoever helps you). If the app will not even start: `./doctor.sh` in the project folder.
 
 * *"FFmpeg has no subtitles filter"* → `brew uninstall ffmpeg && brew install ffmpeg-full`.
-* *Port in use* → another Frameflow/dev server is running on 8000 or 3000. Close the other Terminal window running it, or restart your Mac.
+* *Port in use* → another HookHunt/dev server is running on 8000 or 3000. Close the other Terminal window running it, or restart your Mac.
 * *"permission denied" running a script* → run `chmod +x setup-mac.sh start.sh scripts/fetch_fonts.sh` once.
 * *Page says it cannot connect* → the Terminal running `./start.sh` was closed; start it again.
 * *Transcription fails on first run* → needs internet once to fetch the Whisper model.

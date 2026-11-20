@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-command setup for macOS: installs what is missing (via Homebrew), then starts Frameflow.
+# One-command setup for macOS: installs what is missing (via Homebrew), then starts HookHunt.
 #   ./setup-mac.sh           install anything missing, then start the app
 #   ./setup-mac.sh --check   only report what is missing
 set -uo pipefail
@@ -41,5 +41,5 @@ else
   fi
 fi
 [ $CHECK = 1 ] && { say "All good."; exit 0; }
-say "Starting Frameflow. First run downloads Python packages, fonts and (when you first transcribe) the speech model."
+say "Starting HookHunt. First run downloads Python packages, fonts and (when you first transcribe) the speech model."
 exec ./start.sh

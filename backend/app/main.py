@@ -16,11 +16,11 @@ async def lifespan(app: FastAPI):
     db.init()
     jobs.recover_interrupted()
     jobs.clean_temp_downloads()
-    log.info("Frameflow backend ready. ffmpeg=%s", config.FFMPEG)
+    log.info("HookHunt backend ready. ffmpeg=%s", config.FFMPEG)
     yield
 
 
-app = FastAPI(title="Frameflow", lifespan=lifespan)
+app = FastAPI(title="HookHunt", lifespan=lifespan)
 # Local-only app: only the local frontend may call it from a browser.
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"], allow_methods=["*"], allow_headers=["*"])
 

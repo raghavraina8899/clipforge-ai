@@ -47,12 +47,12 @@ export default function Storage() {
 
   return (
     <div>
-      <PageHeader title="Storage" subtitle="Everything Frameflow keeps on this computer. Tick what you no longer need and free the space. Nothing is deleted until you confirm."
+      <PageHeader title="Storage" subtitle="Everything HookHunt keeps on this computer. Tick what you no longer need and free the space. Nothing is deleted until you confirm."
         actions={<Button variant="outline" onClick={load}><RefreshCw className="h-4 w-4" />Refresh</Button>} />
       {err && <div className="mb-4"><Notice kind="error">{err}</Notice></div>}
       {msg && <div className="mb-4"><Notice kind="ok">{msg}</Notice></div>}
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">Used by Frameflow</div><div className="mt-1 text-3xl font-semibold tracking-tight">{d ? fmtBytes(d.total) : "…"}</div></CardContent></Card>
+        <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">Used by HookHunt</div><div className="mt-1 text-3xl font-semibold tracking-tight">{d ? fmtBytes(d.total) : "…"}</div></CardContent></Card>
         <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">Free on this disk</div><div className="mt-1 text-3xl font-semibold tracking-tight">{d ? fmtBytes(d.disk_free) : "…"}</div>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-gradient-to-r from-primary to-cyan" style={{ width: `${Math.max(2, usedPct)}%` }} /></div></CardContent></Card>
         <Card className="glow-ring"><CardContent className="p-5"><div className="text-xs text-muted-foreground">Selected to delete</div><div className="mt-1 text-3xl font-semibold tracking-tight text-gradient">{fmtBytes(freed)}</div></CardContent></Card>
