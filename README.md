@@ -44,8 +44,8 @@ Not supported directly. Install **WSL** (Ubuntu) and follow the Linux steps insi
 ### What to expect
 * Everything runs on your computer. No account, no API key, no subscription.
 * The first time you process a video, a speech model (~480 MB) downloads once; after that it works offline (except YouTube-URL mode).
-* Your videos and projects stay in the `data/` folder next to the app.
-* If something fails the app shows the reason; see Troubleshooting below. Logs: `data/logs/clipforge.log`.
+* Your videos and projects stay on your computer, outside the app folder: `~/Library/Application Support/ClipForge` on a Mac (`~/.local/share/clipforge` on Linux), so iCloud/Dropbox never uploads them. Set `CLIPFORGE_DATA=/some/folder` to change it.
+* If something fails the app shows the reason; see Troubleshooting below. Logs: `<data folder>/logs/clipforge.log`.
 
 ## Run it (details)
 
@@ -74,7 +74,7 @@ Set `CLIPFORGE_DEV=1 ./start.sh` for development mode (hot reload).
 * **Live streams**: direct stream addresses only (HLS `.m3u8`, RTMP, RTSP, SRT, UDP, plain http) and you must confirm authorization. Platform page URLs (YouTube, Twitch, …) are refused; no DRM/login bypass. Pause stops capture (the paused time is not recorded). Copy-mode recording waits for the stream's next keyframe (up to 20 s).
 * **Viral score** = weighted estimate of hook, emotion, information, engagement, standalone context and ending (0–100). It is not a prediction.
 * **Analysis**: the built-in analyzer is rule-based and works offline. Optional **Gemini** (your own key) or **Ollama** (local model) improve ranking and copy; their output is validated (timestamps snapped to real sentence boundaries, scores clamped, overlaps removed) and, on any failure or quota error, ClipForge falls back to the built-in analyzer and says so.
-* **Gemini quotas**: Google's free tier is rate-limited, with limits that differ by model and can change; see ai.google.dev. The key is stored only in `data/settings.json` (chmod 600), sent only to Google in a header, never returned to the browser or written to logs.
+* **Gemini quotas**: Google's free tier is rate-limited, with limits that differ by model and can change; see ai.google.dev. The key is stored only in `settings.json` in the data folder (chmod 600), sent only to Google in a header, never returned to the browser or written to logs.
 * **Smart crop**: OpenCV Haar face detector + mouth-motion heuristic for the active speaker, smoothed with a dead-zone camera. Works best with front-facing faces; otherwise it falls back to center crop and reports that. (MediaPipe can be added behind `services/vision.py`; it is not required.)
 * **Resolution honesty**: a 16:9 → 9:16 crop uses only ~1/3 of the source width. If an export needs upscaling, the result states the factor. 1440p/4K are reduced unless the source really has the pixels; 60 fps is not invented from 30 fps.
 * **Emoji** in captions are composited as image overlays (libass cannot render colour emoji); this needs macOS' Apple Color Emoji font and is skipped with a notice elsewhere.
@@ -91,11 +91,11 @@ backend/   FastAPI (Python)
   app/pipeline.py         ingest → proxy → transcribe → analyze → clips; render job; thumbnails
   app/services/           ffmpeg · transcribe (faster-whisper) · analyze · llm (Gemini/Ollama) ·
                           captions (ASS/SRT + presets) · vision (OpenCV) · render (filter graph) · social · sources (YouTube/live)
-data/      SQLite DB, project folders (originals, proxy, transcript.json, exports/), logs, uploaded audio
+(data folder)  SQLite DB, project folders (originals, proxy, transcript.json, exports/), logs, uploaded audio
 ```
 
 The UI talks to the API at `http://127.0.0.1:8000` (CORS limited to localhost:3000). Large uploads are streamed straight to disk.
-Logs: `data/logs/clipforge.log`. To add a caption preset edit `PRESETS` in `backend/app/services/captions.py`; to add an AI provider add a branch in `services/llm.py`.
+Logs: `<data folder>/logs/clipforge.log`. To add a caption preset edit `PRESETS` in `backend/app/services/captions.py`; to add an AI provider add a branch in `services/llm.py`.
 
 ## Troubleshooting
 

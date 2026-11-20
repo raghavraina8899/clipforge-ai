@@ -16,13 +16,23 @@ fi
 FILTERS=$(ffmpeg -hide_banner -filters 2>/dev/null || true)
 grep -qE "[[:space:]]subtitles[[:space:]]" <<<"$FILTERS" || die "Your FFmpeg has no 'subtitles' filter (libass). On macOS: brew uninstall ffmpeg && brew install ffmpeg-full"
 
+# macOS syncs Desktop/Documents to iCloud. Bulky generated folders get the ".nosync" suffix (iCloud skips them) behind a symlink.
+nosync() {
+  local p="$1"
+  [ "$(uname)" = "Darwin" ] || return 0
+  case "$PWD" in "$HOME/Desktop"*|"$HOME/Documents"*|*"/com~apple~CloudDocs"*) ;; *) return 0 ;; esac
+  [ -L "$p" ] && return 0
+  if [ -d "$p" ]; then mv "$p" "$p.nosync"; else mkdir -p "$p.nosync"; fi
+  ln -s "$(basename "$p").nosync" "$p"
+}
+
 # ---- backend
 want_minor=$("$PY" -c 'import sys;print(sys.version_info[1])')
 if [ -x backend/.venv/bin/python ]; then
   have_minor=$(backend/.venv/bin/python -c 'import sys;print(sys.version_info[1])')
-  if [ "$have_minor" -lt 10 ] && [ "$want_minor" -ge 10 ]; then say "Upgrading the Python environment to $($PY --version)…"; rm -rf backend/.venv; fi
+  if [ "$have_minor" -lt 10 ] && [ "$want_minor" -ge 10 ]; then say "Upgrading the Python environment to $($PY --version)…"; rm -rf backend/.venv backend/.venv.nosync; fi
 fi
-if [ ! -x backend/.venv/bin/python ]; then say "Creating Python environment ($($PY --version))…"; "$PY" -m venv backend/.venv; fi
+if [ ! -x backend/.venv/bin/python ]; then nosync backend/.venv; say "Creating Python environment ($($PY --version))…"; "$PY" -m venv backend/.venv; fi
 REQ_HASH=$(shasum backend/requirements.txt | cut -d' ' -f1)
 if [ ! -f backend/.venv/.req_hash ] || [ "$(cat backend/.venv/.req_hash)" != "$REQ_HASH" ]; then
   say "Installing backend dependencies (first run takes a few minutes)…"
@@ -34,9 +44,9 @@ if ! ls backend/fonts/*.ttf >/dev/null 2>&1; then say "Downloading free open-sou
 
 # ---- frontend
 cd frontend
-[ -d node_modules ] || { say "Installing frontend dependencies…"; npm install --no-audit --no-fund --loglevel=error; }
+[ -d node_modules ] || { nosync node_modules; say "Installing frontend dependencies…"; npm install --no-audit --no-fund --loglevel=error; }
 if [ "${CLIPFORGE_DEV:-0}" = "1" ]; then FRONT="npm run dev"; else
-  if [ ! -f .next/BUILD_ID ] || [ -n "$(find app components lib package.json tailwind.config.ts -newer .next/BUILD_ID -print -quit)" ]; then say "Building the interface…"; npm run build >/dev/null; fi
+  if [ ! -f .next.nosync/BUILD_ID ] || [ -n "$(find app components lib package.json tailwind.config.ts -newer .next.nosync/BUILD_ID -print -quit)" ]; then say "Building the interface…"; npm run build >/dev/null; fi
   FRONT="npm run start"
 fi
 cd ..

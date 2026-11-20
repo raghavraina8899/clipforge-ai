@@ -16,7 +16,7 @@ const items = [
 ];
 
 export function Sidebar() {
-  const path = usePathname();
+  const path = usePathname() ?? "";
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-card/50 p-3 md:flex">
       <Link href="/" className="mb-5 flex items-center gap-2 px-2 py-2">
@@ -39,7 +39,7 @@ export function Sidebar() {
 }
 
 export function MobileNav() {
-  const path = usePathname();
+  const path = usePathname() ?? "";
   return (
     <nav className="sticky top-0 z-20 flex gap-1 overflow-x-auto border-b bg-background/95 p-2 backdrop-blur md:hidden">
       {items.map((it) => (

@@ -44,4 +44,4 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 
 ## Notes
 - Servers are stopped after testing; start with `./start.sh`.
-- Data lives in `data/` (git-ignored). Fonts are downloaded by `scripts/fetch_fonts.sh`.
+- Data lives outside the repo: `~/Library/Application Support/ClipForge` (macOS) so iCloud does not sync it; venv/node_modules/build use `.nosync` folders. Fonts are downloaded by `scripts/fetch_fonts.sh`.

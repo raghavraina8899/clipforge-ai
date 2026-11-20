@@ -6,7 +6,16 @@ import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = Path(os.environ.get("CLIPFORGE_DATA", ROOT / "data"))
+def _default_data_dir() -> Path:
+    """Projects, videos and the database live outside the app folder, so they are never swept up by iCloud/Dropbox
+    when the app sits in Desktop or Documents. Override with CLIPFORGE_DATA."""
+    import sys
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "ClipForge"
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "clipforge"
+
+
+DATA_DIR = Path(os.environ.get("CLIPFORGE_DATA") or _default_data_dir())
 PROJECTS_DIR = DATA_DIR / "projects"
 LOG_DIR = DATA_DIR / "logs"
 DB_PATH = DATA_DIR / "clipforge.db"

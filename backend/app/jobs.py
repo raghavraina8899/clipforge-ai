@@ -80,6 +80,17 @@ def cancel(jid: str) -> bool:
     return False
 
 
+def clean_temp_downloads() -> None:
+    """Interrupted jobs can leave temporary downloads behind (they can be GBs): remove them at startup."""
+    import shutil
+    from .config import PROJECTS_DIR
+    for pdir in PROJECTS_DIR.glob("*"):
+        shutil.rmtree(pdir / "tmp_audio", ignore_errors=True)
+        shutil.rmtree(pdir / "work", ignore_errors=True)
+        for part in (pdir / "preview").glob("*.part*") if (pdir / "preview").exists() else []:
+            part.unlink(missing_ok=True)
+
+
 def recover_interrupted() -> None:
     """Jobs left running by a previous process can never finish: mark them failed honestly."""
     for j in db.many("SELECT id FROM jobs WHERE status IN ('queued','running')"):

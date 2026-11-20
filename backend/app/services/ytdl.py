@@ -122,7 +122,7 @@ def download_audio(url: str, out_dir: Path, on_progress: Optional[Callable[[floa
             if tot:
                 on_progress(min(100.0, d.get("downloaded_bytes", 0) / tot * 100))
 
-    opts = {"format": "ba/b", "outtmpl": str(out_dir / "audio_src.%(ext)s"), "noplaylist": True, "quiet": True, "no_warnings": True,
+    opts = {"format": "worstaudio[ext=m4a]/worstaudio/ba[abr<=128]/ba", "outtmpl": str(out_dir / "audio_src.%(ext)s"), "noplaylist": True, "quiet": True, "no_warnings": True,
             "noprogress": True, "progress_hooks": [hook], "retries": 3, "socket_timeout": 30}
     _download(opts, url)
     files = list(out_dir.glob("audio_src.*"))

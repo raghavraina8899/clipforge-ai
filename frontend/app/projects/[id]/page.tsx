@@ -13,7 +13,7 @@ import { cn, deepMerge, fmtTime } from "@/lib/utils";
 interface Detail { project: Project; clips: Clip[]; job: Job | null }
 
 export default function ProjectPage() {
-  const { id } = useParams<{ id: string }>();
+  const id = (useParams<{ id: string }>()?.id ?? "") as string;
   const [d, setD] = useState<Detail | null>(null);
   const [err, setErr] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);

@@ -15,6 +15,7 @@ log = logging.getLogger("clipforge")
 async def lifespan(app: FastAPI):
     db.init()
     jobs.recover_interrupted()
+    jobs.clean_temp_downloads()
     log.info("ClipForge backend ready. ffmpeg=%s", config.FFMPEG)
     yield
 
