@@ -46,6 +46,8 @@ def view_project(p: dict) -> dict:
     p["has_video"] = bool(p.get("video_path")) and Path(p["video_path"]).exists()
     p["yt_authorized"] = bool((p.get("meta") or {}).get("yt_authorized"))
     p["can_render"] = p["has_video"] or (p["yt_authorized"] and bool(p.get("source_url")))
+    if p["status"] == "needs_video" and p["can_render"]:
+        p["status"] = "ready"
     p.pop("video_path", None)
     p.pop("proxy_path", None)
     p.pop("thumb_path", None)
@@ -578,20 +580,49 @@ def get_clip_words(cid: str):
     return {"words": pipeline.clip_words(c["project_id"], c["start"], c["end"])}
 
 
+def preview_file(pid: str, cid: str):
+    return pipeline.preview_paths(pid, cid)[0]
+
+
+@router.get("/clips/{cid}/preview-info")
+def preview_info(cid: str):
+    c = get_clip(cid)
+    info = pipeline.preview_info(c)
+    return {"ready": bool(info), **(info or {})}
+
+
+@router.post("/clips/{cid}/preview")
+def make_preview(cid: str):
+    c = get_clip(cid)
+    p = get_project(c["project_id"])
+    if not (p.get("meta") or {}).get("yt_authorized"):
+        err(400, "Downloading is not enabled for this project.")
+    if pipeline.preview_info(c):
+        return {"ready": True}
+    return {"ready": False, "job_id": jobs.submit("preview", pipeline.preview_job(cid), project_id=c["project_id"], clip_id=cid)}
+
+
 @router.get("/clips/{cid}/framing")
 def framing(cid: str, layout: str = "smart"):
     c = get_clip(cid)
     p = get_project(c["project_id"])
-    if not p.get("meta") or not pipeline.paths(p["id"])["proxy"].exists():
-        err(400, "No video is attached.")
     P = pipeline.paths(p["id"])
+    pv = pipeline.preview_info(c)
+    if not P["proxy"].exists() and not pv:
+        err(400, "No video is attached.")
     cache = P["work"] / f"framing-{cid}-{c['start']:.2f}-{c['end']:.2f}.json"
+    if not P["proxy"].exists() and cache.exists() and pv is None:
+        cache.unlink()
     if cache.exists():
         return json.loads(cache.read_text())
     st = pipeline.clip_settings(c)
-    pl = render.plan(p["meta"], st, None)
-    res = vision.track(P["proxy"], c["start"], c["end"], p["meta"]["width"], p["meta"]["height"], pl["crop_w"])
-    out = {**res, "src_w": p["meta"]["width"], "src_h": p["meta"]["height"]}
+    if P["proxy"].exists():
+        meta, video, off = p["meta"], P["proxy"], 0.0
+    else:  # URL-only mode: track on the temporary preview segment (times relative to it)
+        meta, video, off = {"width": pv["width"], "height": pv["height"], "fps": pv["fps"], "duration": pv["duration"]}, preview_file(p["id"], cid), pv["seg_start"]
+    pl = render.plan(meta, st, None)
+    res = vision.track(video, c["start"] - off, c["end"] - off, meta["width"], meta["height"], pl["crop_w"])
+    out = {**res, "src_w": meta["width"], "src_h": meta["height"]}
     P["work"].mkdir(exist_ok=True)
     cache.write_text(json.dumps(out))
     return out

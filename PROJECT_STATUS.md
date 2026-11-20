@@ -24,7 +24,8 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 ## Added 2026-11-20: URL-only automatic clips
 - YouTube tab has an ownership/permission checkbox. When ticked: moments are found from captions (or temporary audio download if none), and on render only that clip's time range is downloaded with yt-dlp, transcribed, rendered, then deleted (`services/ytdl.py`, `pipeline.render_job` segment mode).
 - Tested: the segment → transcribe → render → delete logic, with the download step replaced by a local file cut. **Not tested: the real yt-dlp download from YouTube** (needs a video the owner may use; yt-dlp on Python 3.9 is pinned to an older release).
-- Known limits: no live preview/thumbnail frames for URL-only projects (video isn't kept).
+- Live preview in URL-only mode: opening a clip downloads a small 480p copy of just that segment (cached under `preview/`), re-transcribes it for exact caption timing, and shows it in the editor; it is deleted when the clip is exported. Tested with a fake download only.
+- Known limits: no thumbnail frames for URL-only projects.
 
 ## Not yet verified / known gaps
 - Real YouTube segment/audio download end to end

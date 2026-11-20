@@ -1,8 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Captions, Crop, Download, Image as ImageIcon, Megaphone, Scissors, Type, Wand2, Upload, Loader2 } from "lucide-react";
-import { api, Clip, ClipSettings, FontInfo, Project, upload, url, Word } from "@/lib/api";
-import { Badge, Button, Card, Input, Label, Notice, Select, Slider, Switch, Tabs, scoreColor } from "@/components/ui";
+import { api, Clip, ClipSettings, FontInfo, Project, upload, url, useJob, Word } from "@/lib/api";
+import { Badge, Button, Card, Input, JobBar, Label, Notice, Select, Slider, Switch, Tabs, scoreColor } from "@/components/ui";
 import { ClipPreview, Framing } from "@/components/clip-preview";
 import { CaptionControls, PresetGallery, WordEditor } from "@/components/caption-editor";
 import { SocialPanel } from "@/components/social-panel";
@@ -23,15 +23,39 @@ export function ClipEditor({ project, clip, fonts, patch, refresh }: { project: 
   const st = clip.settings;
   const set = (p: Partial<ClipSettings> | any) => patch(clip.id, { settings: p });
 
+  // URL-only projects: a small temporary preview segment of just this clip is fetched on demand
+  const urlOnly = !project.has_video && project.can_render;
+  const [pv, setPv] = useState<{ ready: boolean; url?: string; seg_start: number; width: number; height: number } | null>(null);
+  const [pvJob, setPvJob] = useState<string | null>(null);
+  const [pvErr, setPvErr] = useState("");
+  const loadPv = useCallback(async () => {
+    if (!urlOnly) return;
+    setPvErr("");
+    try {
+      const i = await api<any>(`/clips/${clip.id}/preview-info`);
+      if (i.ready) { setPv(i); return; }
+      setPv(null);
+      const r = await api<any>(`/clips/${clip.id}/preview`, { method: "POST", body: {} });
+      if (r.ready) { loadPvRef.current?.(); } else setPvJob(r.job_id);
+    } catch (e: any) { setPvErr(e.message); }
+  }, [clip.id, urlOnly]); // eslint-disable-line
+  const loadPvRef = useRef<() => void>(undefined);
+  loadPvRef.current = loadPv;
+  const pvJobState = useJob(pvJob, (j) => { setPvJob(null); if (j.status === "done") { loadPv(); } else if (j.status === "error") setPvErr(j.error || "Preview failed"); });
+  const rangeKey = `${clip.start.toFixed(1)}-${clip.end.toFixed(1)}`;
+  useEffect(() => { if (!pvJob) { const t = setTimeout(loadPv, 700); return () => clearTimeout(t); } }, [clip.id, rangeKey, urlOnly]); // eslint-disable-line
+
   const loadWords = useCallback(() => { api<{ words: Word[] }>(`/clips/${clip.id}/words`).then((r) => setWords(r.words)).catch(() => setWords([])); }, [clip.id, clip.start, clip.end]);
   useEffect(() => { loadWords(); }, [loadWords]);
+  useEffect(() => { if (pv?.ready) loadWords(); }, [pv?.url]); // eslint-disable-line
+  const hasPreview = project.has_video || !!pv?.ready;
   useEffect(() => {
     setFraming(null);
-    if (!project.has_video || !["smart", "split"].includes(st.layout)) return;
+    if (!hasPreview || !["smart", "split"].includes(st.layout)) return;
     let stop = false; setFramingBusy(true);
     api<Framing>(`/clips/${clip.id}/framing`).then((f) => !stop && setFraming(f)).catch(() => {}).finally(() => !stop && setFramingBusy(false));
     return () => { stop = true; };
-  }, [clip.id, clip.start, clip.end, st.layout, project.has_video]);
+  }, [clip.id, clip.start, clip.end, st.layout, hasPreview, pv?.url]);
   const onTime = useCallback((t: number) => setPlayhead(t), []);
 
   return (
@@ -39,8 +63,17 @@ export function ClipEditor({ project, clip, fonts, patch, refresh }: { project: 
       <div className="xl:sticky xl:top-6 xl:self-start">
         {project.has_video && project.proxy_url ? (
           <ClipPreview src={url(project.proxy_url)} srcW={project.meta.width} srcH={project.meta.height} start={clip.start} end={clip.end} settings={st} words={words} framing={framing} onTime={onTime} seekTo={seek} />
-        ) : project.can_render ? <Notice kind="info">The video for this clip is downloaded only when you render it, so there is no live preview. Caption styling is shown in Subtitle Styles; the exported clip is the real result.</Notice>
-          : <Notice kind="warn">No video file is attached to this project, so there is nothing to preview.</Notice>}
+        ) : urlOnly && pv?.ready && pv.url ? (
+          <ClipPreview src={url(pv.url)} srcW={pv.width} srcH={pv.height} start={clip.start - pv.seg_start} end={clip.end - pv.seg_start} settings={st}
+            words={words.map((w) => ({ ...w, s: w.s - pv.seg_start, e: w.e - pv.seg_start }))} framing={framing} onTime={onTime} seekTo={seek} />
+        ) : urlOnly ? (
+          <Card className="space-y-3 p-4">
+            {pvErr ? <Notice kind="error">{pvErr}<div className="mt-2"><Button size="sm" variant="secondary" onClick={loadPv}>Try again</Button></div></Notice>
+              : pvJobState ? <JobBar job={pvJobState} onCancel={() => api(`/jobs/${pvJobState.id}/cancel`, { method: "POST" })} />
+              : <p className="text-sm text-muted-foreground">Preparing preview…</p>}
+            <p className="text-xs text-muted-foreground">Only this clip’s short segment is downloaded (480p). It is deleted after you export the clip.</p>
+          </Card>
+        ) : <Notice kind="warn">No video file is attached to this project, so there is nothing to preview.</Notice>}
         {framingBusy && <p className="mt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />Detecting faces for smart framing…</p>}
         {framing && !framingBusy && <p className="mt-2 text-center text-xs text-muted-foreground">{framing.note}</p>}
       </div>

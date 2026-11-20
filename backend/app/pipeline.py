@@ -149,6 +149,82 @@ def reanalyze_job(pid: str):
     return fn
 
 
+# ------------------------------------------------------------------ URL-only preview segments
+
+import threading
+_tr_lock = threading.Lock()
+
+
+def preview_paths(pid: str, clip_id: str) -> tuple:
+    d = paths(pid)["dir"] / "preview"
+    return d / f"{clip_id}.mp4", d / f"{clip_id}.json"
+
+
+def preview_info(clip: dict) -> Optional[dict]:
+    """Info about a cached preview segment if it still covers the clip's range."""
+    f, j = preview_paths(clip["project_id"], clip["id"])
+    if not (f.exists() and j.exists()):
+        return None
+    try:
+        info = json.loads(j.read_text())
+    except ValueError:
+        return None
+    if clip["start"] < info["seg_start"] - 0.01 or clip["end"] > info["seg_start"] + info["duration"] + 0.01:
+        return None
+    return {**info, "url": media_url(clip["project_id"], f)}
+
+
+def splice_words(pid: str, seg_start: float, seg_end: float, new_words: list) -> None:
+    """Replace caption-estimated words in [seg_start, seg_end] with precisely timed ones."""
+    with _tr_lock:
+        P = paths(pid)
+        tr = load_transcript(pid)
+        if not tr:
+            return
+        keep = [w for w in tr["words"] if w["e"] <= seg_start or w["s"] >= seg_end]
+        add = [{"w": w["w"], "s": round(w["s"] + seg_start, 3), "e": round(w["e"] + seg_start, 3)} for w in new_words]
+        tr["words"] = sorted(keep + add, key=lambda w: w["s"])
+        tr["word_timing"] = "mixed"
+        P["transcript"].write_text(json.dumps(tr, ensure_ascii=False))
+
+
+def preview_job(clip_id: str):
+    def fn(ctx: JobCtx):
+        from .services import ytdl
+        clip = db.one("SELECT * FROM clips WHERE id=?", (clip_id,))
+        proj = db.one("SELECT * FROM projects WHERE id=?", (clip["project_id"],))
+        if not ((proj.get("meta") or {}).get("yt_authorized") and proj.get("source_url")):
+            raise RuntimeError("Downloading is not enabled for this project.")
+        pid = proj["id"]
+        f, j = preview_paths(pid, clip_id)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        seg_start, seg_end = max(0.0, clip["start"] - 2.0), clip["end"] + 2.0
+        ctx.update("Loading preview", 2, "Downloading a small 480p copy of this clip only (deleted after you export it)")
+        try:
+            got = ytdl.download_segment(proj["source_url"], seg_start, seg_end, f.parent, clip_id,
+                                        lambda p: ctx.update("Loading preview", 2 + p * 0.5, f"Downloading {p:.0f}%"), lambda: ctx.cancelled.is_set(), max_height=480)
+        except ytdl.DownloadError as e:
+            raise RuntimeError(str(e))
+        if got != f:
+            got.replace(f)
+        info = ffmpeg.probe(f)
+        ctx.update("Syncing captions", 55, "Exact word timing from the real audio")
+        work = paths(pid)["work"] / f"pv_{clip_id}"
+        work.mkdir(parents=True, exist_ok=True)
+        try:
+            wav = work / "a.wav"
+            ffmpeg.extract_audio(f, wav)
+            tr = transcribe.transcribe(wav, work / "t.json", settings_store.load()["transcription"]["model"],
+                                       (proj.get("prefs") or {}).get("language") or "auto", info["duration"],
+                                       lambda p, m: ctx.update("Syncing captions", 55 + p * 0.4, m))
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+        splice_words(pid, seg_start, seg_start + info["duration"], tr["words"])
+        j.write_text(json.dumps({"seg_start": seg_start, "duration": info["duration"], "width": info["width"], "height": info["height"], "fps": info["fps"]}))
+        return {"ok": True}
+    return fn
+
+
 # ------------------------------------------------------------------ rendering
 
 def render_job(clip_id: str, settings_override: Optional[dict] = None):
@@ -206,6 +282,9 @@ def render_job(clip_id: str, settings_override: Optional[dict] = None):
                 rel_words = [{"w": w["w"], "s": w["s"] - clip["start"], "e": w["e"] - clip["start"]} for w in words]
         finally:
             shutil.rmtree(work, ignore_errors=True)  # temp download + render scratch files; exports are kept
+        if segment_mode:  # export is done: remove the temporary preview download too
+            for f in preview_paths(proj["id"], clip_id):
+                f.unlink(missing_ok=True)
         srt = out.with_suffix(".srt")
         from .services import captions
         srt.write_text(captions.build_srt(rel_words), encoding="utf-8")

@@ -29,7 +29,8 @@ def _friendly(msg: str) -> str:
 
 
 def download_segment(url: str, start: float, end: float, out_dir: Path, name: str,
-                     on_progress: Optional[Callable[[float], None]] = None, cancelled: Optional[Callable[[], bool]] = None) -> Path:
+                     on_progress: Optional[Callable[[float], None]] = None, cancelled: Optional[Callable[[], bool]] = None,
+                     max_height: int = 1080) -> Path:
     try:
         import yt_dlp
         from yt_dlp.utils import download_range_func
@@ -47,7 +48,7 @@ def download_segment(url: str, start: float, end: float, out_dir: Path, name: st
                 on_progress(min(100.0, d.get("downloaded_bytes", 0) / tot * 100))
 
     opts = {
-        "format": "bv*[height<=1080]+ba/b[height<=1080]/b", "merge_output_format": "mp4", "outtmpl": tmpl, "noplaylist": True,
+        "format": f"bv*[height<={max_height}]+ba/b[height<={max_height}]/b", "merge_output_format": "mp4", "outtmpl": tmpl, "noplaylist": True,
         "download_ranges": download_range_func(None, [(max(0.0, start), end)]), "force_keyframes_at_cuts": True,
         "quiet": True, "no_warnings": True, "noprogress": True, "progress_hooks": [hook], "retries": 3, "socket_timeout": 30,
         "overwrites": True,
