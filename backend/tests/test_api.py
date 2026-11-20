@@ -145,3 +145,26 @@ def test_tighten_plan_endpoint(client):
     assert on["pauses"] >= 1 and on["removed_seconds"] > 5 and on["new_duration"] < 11
     assert client.get("/api/clips/c2/srt").status_code == 200
     client.delete("/api/projects/p2")
+
+
+def test_brand_kit_api_roundtrip(client):
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGBA", (120, 60), (0, 128, 255, 255)).save(buf, "PNG")
+    assert client.post("/api/brand/upload?kind=logo&filename=logo.gif", content=buf.getvalue()).status_code == 400      # wrong type
+    assert client.post("/api/brand/upload?kind=banner&filename=logo.png", content=buf.getvalue()).status_code == 400    # unknown kind
+    assert client.post("/api/brand/upload?kind=logo&filename=logo.png", content=b"not an image").status_code == 400      # unreadable file is rejected and not kept
+    up = client.post("/api/brand/upload?kind=logo&filename=my logo.png", content=buf.getvalue())
+    assert up.status_code == 200 and up.json()["info"]["width"] == 120
+    name = up.json()["file"]
+    assert client.get(f"/api/brand/file/{name}").status_code == 200 and client.get("/api/brand/file/nope.png").status_code == 404
+    kit = {"id": "kk", "name": "Channel A", "logo": {"file": name, "pos": "br", "size": 0.25, "opacity": 0.8, "margin": 0.05}, "intro": {"file": ""}, "outro": {"file": ""}}
+    r = client.put("/api/brand", json={"brands": [kit], "default": "kk"}).json()
+    assert r["default"] == "kk" and r["brands"][0]["logo"]["pos"] == "br" and client.get("/api/brand").json()["brands"][0]["name"] == "Channel A"
+    assert client.put("/api/brand", json={"brands": [kit], "default": "does-not-exist"}).json()["default"] == ""        # an unknown default is dropped
+    assert pipeline.clip_defaults()["brand"]["id"] == ""
+    client.put("/api/brand", json={"brands": [kit], "default": "kk"})
+    assert pipeline.clip_defaults()["brand"]["id"] == "kk"                                                              # new clips start with the default kit
+    client.put("/api/brand", json={"brands": [], "default": ""})
+    assert client.get(f"/api/brand/file/{name}").status_code == 404                                                     # deleting the kit removes its files

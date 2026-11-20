@@ -30,6 +30,7 @@ def clip_defaults() -> dict:
     d = copy.deepcopy(s["video"])
     d["caption"] = copy.deepcopy(s["caption"])
     d["audio"] = {}
+    d["brand"] = {**d.get("brand", {}), "id": s.get("brand_default", "")}
     return d
 
 

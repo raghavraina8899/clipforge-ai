@@ -31,9 +31,12 @@ DEFAULTS = {
         },
         "hook": {"enabled": False, "text": "", "duration": 2.5, "style": "pop"},
         "ending": {"enabled": False, "text": "", "duration": 2.5},
+        "brand": {"id": "", "logo": True, "intro": True, "outro": True},
         "tighten": {"enabled": False, "silence": True, "silence_max": 0.7, "keep": 0.2, "fillers": True, "filler_words": "um, umm, uh, uhh, uhm, er, erm, ah, hmm, hm, mm, mmm"},
     },
     "caption": {"preset": "hormozi"},
+    "brands": [],
+    "brand_default": "",
 }
 
 

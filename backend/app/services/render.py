@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from ..config import ASSETS_DIR, FONTS_DIR
-from . import captions, ffmpeg, tighten, vision
+from . import brand, captions, ffmpeg, tighten, vision
 
 log = logging.getLogger("render")
 ASPECTS = {"9:16": (9, 16), "1:1": (1, 1), "16:9": (16, 9), "4:5": (4, 5)}
@@ -277,6 +277,16 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
     last = "base"
     graph.append(f"[base]{','.join(post)}[v0]")
     last = "v0"
+    bsel = st.get("brand") or {}
+    kit = brand.get_kit(bsel.get("id")) if bsel.get("id") else None
+    logo = brand.logo_overlay(kit, W, H) if (kit and bsel.get("logo", True)) else None
+    if logo:
+        inputs += ["-loop", "1", "-t", f"{dur_out:.2f}", "-i", str(logo["file"])]
+        graph.append(f"[{nin}:v]scale={logo['scale_w']}:-1,format=rgba,colorchannelmixer=aa={logo['opacity']:.2f}[lg]")
+        graph.append(f"[{last}][lg]overlay=x={logo['x']}:y={logo['y']}[vlogo]")
+        last = "vlogo"
+        nin += 1
+        notes.append(f"Logo “{kit['name']}” added.")
     for k, ov in enumerate(overlays[:30]):
         png = work / f"emoji{k}.png"
         if _emoji_png(ov["emoji"], png, int(W * 0.11)):
@@ -359,8 +369,19 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
     cmd += [*vcodec, "-movflags", "+faststart", "-t", f"{dur_out:.3f}", str(Path(out_path).resolve())]
 
     # cwd=work: relative captions/fonts/graph paths avoid every filter-escaping pitfall (and are thread-safe)
-    ffmpeg.run(cmd, dur_out, ctx, lambda p: on_progress and on_progress(10 + p * 0.9, "Rendering video"), cwd=work)
+    wrap = bool(kit) and (bool(bsel.get("intro", True) and (kit.get("intro") or {}).get("file")) or bool(bsel.get("outro", True) and (kit.get("outro") or {}).get("file")))
+    main_share = 0.8 if wrap else 1.0
+    ffmpeg.run(cmd, dur_out, ctx, lambda p: on_progress and on_progress(10 + p * 0.9 * main_share, "Rendering video"), cwd=work)
+    intro_s = 0.0
+    if wrap:
+        if on_progress:
+            on_progress(10 + 90 * main_share, "Adding intro / outro")
+        extra_info = brand.add_intro_outro(Path(out_path).resolve(), kit, bool(bsel.get("intro", True)), bool(bsel.get("outro", True)), W, H, fps, vcodec, work, ctx,
+                                           lambda p: on_progress and on_progress(10 + 90 * main_share + p * 0.18, "Adding intro / outro"))
+        intro_s = extra_info["intro_seconds"]
+        dur_out += extra_info["intro_seconds"] + extra_info["outro_seconds"]
+        notes.append(f"Brand kit “{kit['name']}”: " + ", ".join(x for x, v in (("intro", extra_info["intro_seconds"]), ("outro", extra_info["outro_seconds"])) if v) + " added.")
     return {"width": W, "height": H, "fps": fps, "resolution": pl["res"], "codec": codec, "quality": q,
             "duration": round(dur_out, 2), "layout_used": layout, "notes": [n for n in notes if n],
-            "size": out_path.stat().st_size, "upscale": pl["upscale"], "srt_words": rel_words,
+            "size": out_path.stat().st_size, "upscale": pl["upscale"], "srt_words": [{**w, "s": round(w["s"] + intro_s, 3), "e": round(w["e"] + intro_s, 3)} for w in rel_words],
             "tightened": ({"removed_seconds": cut["removed_seconds"], "pauses": cut["pauses"], "fillers": cut["fillers"]} if cut_on else None)}

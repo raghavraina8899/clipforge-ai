@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Wand2, FolderKanban, Library, Captions, Sparkles, SlidersHorizontal, Info, HardDrive } from "lucide-react";
+import { LayoutDashboard, Wand2, FolderKanban, Library, Captions, Sparkles, SlidersHorizontal, Info, HardDrive, Stamp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
 import { Logo } from "@/components/fx";
@@ -12,6 +12,7 @@ const items = [
   { href: "/projects", label: "My Projects", icon: FolderKanban },
   { href: "/library", label: "Clip Library", icon: Library },
   { href: "/styles", label: "Subtitle Styles", icon: Captions },
+  { href: "/brand", label: "Brand kit", icon: Stamp },
   { href: "/storage", label: "Storage", icon: HardDrive },
   { href: "/settings/ai", label: "AI Settings", icon: Sparkles },
   { href: "/settings/video", label: "Video Settings", icon: SlidersHorizontal },

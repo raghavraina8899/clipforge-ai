@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Captions, Crop, Download, Image as ImageIcon, Megaphone, Scissors, Trash2, Type, Wand2, Upload, Loader2 } from "lucide-react";
-import { api, Clip, ClipSettings, FontInfo, Project, upload, url, useJob, Word } from "@/lib/api";
+import Link from "next/link";
+import { api, BrandKit, Clip, ClipSettings, FontInfo, Project, upload, url, useJob, Word } from "@/lib/api";
 import { Badge, Button, Card, Input, JobBar, Label, Notice, Select, Slider, Switch, Tabs, scoreColor } from "@/components/ui";
 import { ClipPreview, Framing } from "@/components/clip-preview";
 import { CaptionControls, PresetGallery, WordEditor } from "@/components/caption-editor";
@@ -187,6 +188,7 @@ function LookTab({ st, set }: { st: ClipSettings; set: (p: any) => void }) {
   );
   return (
     <div className="space-y-6">
+      <BrandPicker st={st} set={set} />
       <div><h4 className="mb-2 text-sm font-semibold">Format</h4>
         <div className="flex flex-wrap gap-2">{[["9:16", "Reels / Shorts"], ["1:1", "Square"], ["16:9", "Landscape"], ["4:5", "Feed"]].map(([f, l]) => (
           <button key={f} onClick={() => set({ format: f })} className={`rounded-md border px-3 py-2 text-left text-sm ${st.format === f ? "border-primary bg-primary/10 text-primary" : "border-input"}`}><div className="font-medium">{f}</div><div className="text-[11px] text-muted-foreground">{l}</div></button>))}</div></div>
@@ -322,6 +324,34 @@ function TightenBox({ clip, plan, set }: { clip: Clip; plan: TightenPlan | null;
           )}
           <p className="text-xs text-muted-foreground">Cuts follow the transcript's word timing, so check the preview. Speech models often leave out "um" and "uh" entirely, so filler cutting only works for fillers that appear in the transcript; pause cutting always works. Captions and the SRT file follow the shorter timeline.</p>
         </>
+      )}
+    </div>
+  );
+}
+
+
+function BrandPicker({ st, set }: { st: ClipSettings; set: (p: any) => void }) {
+  const [kits, setKits] = useState<BrandKit[]>([]);
+  useEffect(() => { api<{ brands: BrandKit[] }>("/brand").then((r) => setKits(r.brands)).catch(() => {}); }, []);
+  const b = st.brand || { id: "", logo: true, intro: true, outro: true };
+  const kit = kits.find((k) => k.id === b.id);
+  return (
+    <div className="space-y-3 rounded-lg border border-white/5 bg-white/[0.02] p-3">
+      <div className="flex items-center justify-between"><h4 className="text-sm font-semibold">Brand kit</h4><Link href="/brand" className="text-xs text-primary underline">Manage kits</Link></div>
+      <Select value={b.id} onChange={(e) => set({ brand: { id: e.target.value } })}>
+        <option value="">None</option>{kits.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}</Select>
+      {!kits.length && <p className="text-xs text-muted-foreground">You have no brand kits yet. Create one to add your logo and an intro/outro.</p>}
+      {kit && (
+        <div className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Switch label="Logo" checked={b.logo && !!kit.logo.file} onChange={(v) => set({ brand: { logo: v } })} />
+            <Switch label="Intro" checked={b.intro && !!kit.intro.file} onChange={(v) => set({ brand: { intro: v } })} />
+            <Switch label="Outro" checked={b.outro && !!kit.outro.file} onChange={(v) => set({ brand: { outro: v } })} />
+          </div>
+          {!kit.logo.file && !kit.intro.file && !kit.outro.file && <p className="text-xs text-warning">This kit has no logo, intro or outro yet.</p>}
+          {kit.caption && <Button size="sm" variant="secondary" onClick={() => set({ caption: { ...kit.caption } })}>Use this kit's caption style</Button>}
+          <p className="text-xs text-muted-foreground">The logo is drawn on the video; the intro and outro are joined before and after the clip when you export, which takes a little longer. Captions and the SRT file shift to follow the intro.</p>
+        </div>
       )}
     </div>
   );

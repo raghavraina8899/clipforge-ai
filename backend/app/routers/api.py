@@ -143,6 +143,74 @@ def speed_test():
     return {"job_id": jobs.submit("speedtest", fn)}
 
 
+# ================================================================ brand kit
+
+def brand_payload():
+    s = settings_store.load()
+    return {"brands": s.get("brands", []), "default": s.get("brand_default", "")}
+
+
+@router.get("/brand")
+def brand_get():
+    return brand_payload()
+
+
+@router.post("/brand/upload")
+async def brand_upload(request: Request, kind: str, filename: str):
+    from ..services import brand
+    ext = Path(filename).suffix.lower()
+    if kind == "logo":
+        ok, cap = ext in brand.IMAGE_EXT, 15_000_000
+    elif kind in ("intro", "outro"):
+        ok, cap = ext in brand.IMAGE_EXT | brand.VIDEO_EXT, 600_000_000
+    else:
+        err(400, "kind must be logo, intro or outro.")
+    if not ok:
+        err(400, f"Unsupported file type {ext or '(none)'} for the {kind}. Logos: PNG, JPG, WEBP. Intro/outro: a short video or an image.")
+    name = brand.safe_name(filename)
+    dest = brand.BRAND_DIR / name
+    n = 0
+    with open(dest, "wb") as f:
+        async for chunk in request.stream():
+            n += len(chunk)
+            if n > cap:
+                f.close()
+                dest.unlink(missing_ok=True)
+                err(400, f"That file is too large for a {kind} (limit {cap // 1_000_000} MB).")
+            f.write(chunk)
+    try:
+        info = brand.media_info(dest)
+    except ffmpeg.MediaError as e:
+        dest.unlink(missing_ok=True)
+        err(400, str(e))
+    if kind in ("intro", "outro") and info["duration"] > 30:
+        dest.unlink(missing_ok=True)
+        err(400, "Intros and outros should be 30 seconds or shorter.")
+    return {"file": name, "kind": kind, "info": info}
+
+
+@router.put("/brand")
+def brand_put(body: dict):
+    from ..services import brand
+    kits = [brand.clean_kit(k) for k in (body.get("brands") or [])][:20]
+    ids = {k["id"] for k in kits}
+    default = body.get("default") if body.get("default") in ids else ""
+    s = settings_store.load()
+    s["brands"], s["brand_default"] = kits, default
+    settings_store.save(s)
+    brand.collect_garbage()
+    return brand_payload()
+
+
+@router.get("/brand/file/{name}")
+def brand_file(name: str):
+    from ..services import brand
+    p = brand.path_of(name)
+    if not p:
+        err(404, "File not found.")
+    return FileResponse(p)
+
+
 @router.get("/doctor")
 def doctor_checks(network: int = 1):
     from .. import doctor

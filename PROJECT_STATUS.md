@@ -58,6 +58,9 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 - `backend/tests` (62 fast tests + 1 slow real-import test): pure logic, job scheduler, API, storage safety, FFmpeg renders (formats, layouts, HEVC tag, caption hiding, tighten). `backend/constraints.txt` limits library versions (used via `-c` in requirements.txt). GitHub Actions workflow runs tests on Linux + macOS and builds the frontend.
 - Tighten (silence/filler removal): `services/tighten.py`, wired into `render.py`; off by default. Found and avoided an FFmpeg quirk: `loudnorm` after a cut-and-join truncates audio, so normalisation runs before the cuts. Verified end to end with real transcription (video and audio both 25.2 s, SRT remapped, preview skips the cuts).
 
+## Brand kit (2026-11-20)
+- `services/brand.py`, `/brand` page, clip editor picker, API `/api/brand*`. Logo overlay in the main graph; intro/outro joined in a second pass (`add_intro_outro`). Tested with real renders (durations, sync, logo present/absent). A test caught that ffprobe "reads" text files as images, so images are validated with Pillow.
+
 ## Not yet verified / known gaps
 - Real YouTube segment/audio download end to end
 - Gemini with a real key and Ollama with a real model (only simulated)
