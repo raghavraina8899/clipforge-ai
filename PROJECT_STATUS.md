@@ -33,6 +33,12 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 - Tested on synthetic gameplay+facecam videos (export + browser preview); the corner case is exact, a floating box far from edges is approximate. Real GTA project: user-verified preview.
 - Backend now runs on Python 3.12 (needed for current yt-dlp); `av<17` pinned for faster-whisper.
 
+## Added 2026-11-20: full download + series mode + caption controls
+- YouTube (authorized): full video downloaded once -> normal local pipeline; auto-delete source after all selected clips are exported (exports kept); re-download button.
+- Series mode: consecutive "Part i/N" clips at sentence boundaries, optional start/stop range, "Part N" hook label. Tested with a stand-in download (not a real YouTube download).
+- Captions: Hinglish language option + convert button, show/hide captions, hide captions for chosen time ranges (preview, export, SRT).
+- Data moved out of iCloud (see above).
+
 ## Not yet verified / known gaps
 - Real YouTube segment/audio download end to end
 - Gemini with a real key and Ollama with a real model (only simulated)

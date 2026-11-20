@@ -22,6 +22,8 @@ export default function ProjectPage() {
   const [showRegen, setShowRegen] = useState(false);
   const [dur, setDur] = useState<DurationValue>({ preset: "45-60", min: 45, max: 60 });
   const [maxClips, setMaxClips] = useState(8);
+  const [regenMode, setRegenMode] = useState<"moments" | "series">("moments");
+  const [regenPart, setRegenPart] = useState(60);
   const fonts = useFonts();
 
   const refresh = useCallback(async () => {
@@ -39,7 +41,7 @@ export default function ProjectPage() {
   useEffect(() => { refresh(); }, [id]); // eslint-disable-line
   useEffect(() => {
     const p = d?.project;
-    if (p) { setDur({ preset: "custom", min: p.prefs?.min_dur ?? 45, max: p.prefs?.max_dur ?? 60 }); setMaxClips(p.prefs?.max_clips ?? 8); }
+    if (p) { setDur({ preset: "custom", min: p.prefs?.min_dur ?? 45, max: p.prefs?.max_dur ?? 60 }); setMaxClips(p.prefs?.max_clips ?? 8); setRegenMode(p.prefs?.mode === "series" ? "series" : "moments"); setRegenPart(p.prefs?.part_len ?? 60); }
   }, [d?.project.id]); // eslint-disable-line
   const job = useJob(jobId, () => { setJobId(null); refresh(); });
 
@@ -73,7 +75,7 @@ export default function ProjectPage() {
 
   const regen = async () => {
     setErr("");
-    try { const r = await api<{ job_id: string }>(`/projects/${id}/reanalyze`, { body: { min_dur: dur.min, max_dur: dur.max, max_clips: maxClips } }); setJobId(r.job_id); setShowRegen(false); }
+    try { const r = await api<{ job_id: string }>(`/projects/${id}/reanalyze`, { body: { min_dur: dur.min, max_dur: dur.max, max_clips: maxClips, mode: regenMode, part_len: regenMode === "series" ? regenPart : null } }); setJobId(r.job_id); setShowRegen(false); }
     catch (e: any) { setErr(e.message); }
   };
   const exportSelected = async () => {
@@ -107,6 +109,7 @@ export default function ProjectPage() {
         {p.status !== "processing" && p.analysis && (
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setShowRegen((v) => !v)} disabled={busy}><RefreshCw className="h-4 w-4" />Regenerate suggestions</Button>
+            {p.has_video && p.source_type === "youtube" && <Button variant="outline" onClick={async () => { if (confirm("Delete the downloaded video to free disk space? Your clips, transcript and exports stay. Further editing or exporting needs a re-download.")) { try { await api(`/projects/${id}/source`, { method: "DELETE" }); refresh(); } catch (e: any) { setErr(e.message); } } }}><Trash2 className="h-4 w-4" />Delete downloaded video</Button>}
             {totalExports > 0 && <a href={`${API}/api/projects/${id}/zip`}><Button variant="secondary"><Archive className="h-4 w-4" />Download all (ZIP)</Button></a>}
           </div>
         )}
@@ -133,12 +136,15 @@ export default function ProjectPage() {
       {p.analysis?.note && !busy && <div className="mb-5"><Notice kind="warn">{p.analysis.note}</Notice></div>}
       {p.analysis?.summary && !busy && <p className="mb-5 text-sm text-muted-foreground"><span className="font-medium text-foreground">Summary: </span>{p.analysis.summary}</p>}
 
-      {!p.can_render && (p.status === "needs_video" || (p.source_type !== "live" && p.status !== "processing")) && !busy && <AttachVideo project={p} onStarted={(j) => { setJobId(j); refresh(); }} />}
+      {(!p.can_render || (p.source_type === "youtube" && p.yt_authorized && !p.has_video)) && (p.status === "needs_video" || (p.source_type !== "live" && p.status !== "processing")) && !busy && <AttachVideo project={p} onStarted={(j) => { setJobId(j); refresh(); }} />}
 
       {showRegen && (
         <Card className="mb-5 space-y-4 p-4">
-          <DurationPicker value={dur} onChange={setDur} />
-          <div className="flex items-end gap-3"><div><label className="mb-1 block text-xs text-muted-foreground">Maximum clips</label><Input className="w-24" type="number" min={1} max={30} value={maxClips} onChange={(e) => setMaxClips(+e.target.value)} /></div>
+          <div className="flex gap-2">{([["moments", "Best moments"], ["series", "Series of parts (Part 1, 2, 3…)"]] as const).map(([id, l]) => (
+            <button key={id} onClick={() => setRegenMode(id)} className={cn("rounded-md border px-3 py-1.5 text-sm", regenMode === id ? "border-primary bg-primary/15 text-primary" : "border-input text-muted-foreground")}>{l}</button>))}</div>
+          {regenMode === "moments" ? <DurationPicker value={dur} onChange={setDur} /> : (
+            <div><label className="mb-1 block text-xs text-muted-foreground">Length of each part (seconds)</label><Input className="w-28" type="number" min={10} max={180} value={regenPart} onChange={(e) => setRegenPart(+e.target.value)} /></div>)}
+          <div className="flex items-end gap-3">{regenMode === "moments" && <div><label className="mb-1 block text-xs text-muted-foreground">Maximum clips</label><Input className="w-24" type="number" min={1} max={30} value={maxClips} onChange={(e) => setMaxClips(+e.target.value)} /></div>}
             <Button onClick={regen}><Wand2 className="h-4 w-4" />Regenerate</Button></div>
           <p className="text-xs text-muted-foreground">This replaces the current suggestions (your exported files are kept).</p>
         </Card>
@@ -206,6 +212,18 @@ function AttachVideo({ project, onStarted }: { project: Project; onStarted: (job
           {acc?.transcript ? "Suggestions above come from YouTube’s public captions (timing is estimated). " : acc?.reason ? `${acc.reason} ` : ""}
           Nothing has been downloaded: ClipForge only read public metadata and captions. To get video clips, either confirm below that you may use this video (clips are then fetched one segment at a time and deleted after rendering), or upload the file yourself.
         </p>
+      )}
+      {project.source_type === "youtube" && project.yt_authorized && project.yt_mode === "full" && (
+        <div className="space-y-2 rounded-md border p-3">
+          <p className="text-sm text-muted-foreground">{project.source_deleted ? "The downloaded video was deleted to free space (clips and exports are kept). Download it again to edit or export more." : "The full video is downloaded once, then everything runs locally."}</p>
+          <Button onClick={async () => { try { const r = await api<{ job_id: string }>(`/projects/${project.id}/download-full`, { body: { auto_delete: true } }); onStarted(r.job_id); } catch (e: any) { setErr(e.message); } }}>Download the full video now</Button>
+        </div>
+      )}
+      {project.source_type === "youtube" && project.yt_authorized && project.yt_mode === "segments" && !project.has_video && (
+        <div className="space-y-2 rounded-md border p-3">
+          <p className="text-sm text-muted-foreground">This project fetches each clip separately. Downloading the full video once is more reliable (fewer requests) and enables previews and series mode.</p>
+          <Button variant="secondary" onClick={async () => { try { const r = await api<{ job_id: string }>(`/projects/${project.id}/download-full`, { body: { auto_delete: true } }); onStarted(r.job_id); } catch (e: any) { setErr(e.message); } }}>Download the full video once</Button>
+        </div>
       )}
       {project.source_type === "youtube" && !project.yt_authorized && (
         <div className="space-y-2 rounded-md border p-3">

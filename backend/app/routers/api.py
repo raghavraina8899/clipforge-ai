@@ -45,7 +45,10 @@ def view_project(p: dict) -> dict:
     p["thumb_url"] = pipeline.media_url(p["id"], P["thumb"]) if P["thumb"].exists() else ""
     p["has_video"] = bool(p.get("video_path")) and Path(p["video_path"]).exists()
     p["yt_authorized"] = bool((p.get("meta") or {}).get("yt_authorized"))
-    p["can_render"] = p["has_video"] or (p["yt_authorized"] and bool(p.get("source_url")))
+    m = p.get("meta") or {}
+    p["yt_mode"] = m.get("yt_mode", "segments")  # older projects fetch per-clip segments
+    p["source_deleted"] = bool(m.get("source_deleted"))
+    p["can_render"] = p["has_video"] or (p["yt_authorized"] and bool(p.get("source_url")) and p["yt_mode"] == "segments")
     if p["status"] == "needs_video" and p["can_render"]:
         p["status"] = "ready"
     p.pop("video_path", None)
@@ -209,6 +212,14 @@ def parse_prefs(q: dict) -> dict:
                 out[k] = float(q[k]) if "dur" in k else int(q[k])
             except ValueError:
                 err(400, f"Invalid {k}.")
+    if q.get("mode") == "series":
+        out["mode"] = "series"
+    for k in ("part_len", "range_start", "range_end"):
+        if q.get(k):
+            try:
+                out[k] = float(q[k])
+            except ValueError:
+                err(400, f"Invalid {k}.")
     if q.get("language") in ("auto", "en", "hi", "hinglish"):
         out["language"] = q["language"]
     return out
@@ -263,6 +274,12 @@ async def attach_video(pid: str, request: Request, filename: str):
 class YT(BaseModel):
     url: str
     language: str = "auto"
+    mode: str = "moments"  # moments | series
+    part_len: Optional[float] = None
+    range_start: Optional[float] = None
+    range_end: Optional[float] = None
+    yt_download: str = "full"  # full: download the whole video once (recommended) | segments: fetch each clip separately
+    auto_delete: bool = True  # delete the downloaded video once every selected clip is exported
     authorized: bool = False  # user confirms they own the video / have permission: enables temporary segment download for rendering
     min_dur: Optional[float] = None
     max_dur: Optional[float] = None
@@ -279,6 +296,19 @@ def youtube_job(pid: str, info: dict, url: str, authorized: bool):
                 P["thumb"].write_bytes(r.content)
         except Exception:  # noqa: BLE001 - thumbnail is cosmetic
             pass
+        cur = db.one("SELECT meta FROM projects WHERE id=?", (pid,))["meta"] or {}
+        if authorized and cur.get("yt_mode", "full") == "full":
+            # one download of the whole video; everything after that runs locally on the real file
+            from ..services import ytdl
+            ctx.update("Downloading the video (one time)", 3, "Downloading the full video once; it is deleted after your clips are exported")
+            try:
+                vf = ytdl.download_full(url, P["dir"], "original", 1080, lambda p_: ctx.update("Downloading the video (one time)", 3 + p_ * 0.3, f"Downloading {p_:.0f}%"),
+                                        lambda: ctx.cancelled.is_set())
+            except ytdl.DownloadError as e:
+                db.update("projects", pid, status="error", error=str(e))
+                raise RuntimeError(str(e))
+            db.update("projects", pid, video_path=str(vf))
+            return pipeline.ingest_job(pid)(pipeline.ScaledCtx(ctx, 35, 100))
         ctx.update("Fetching public captions", 35)
         t = sources.youtube_transcript(info["video_id"])
         meta = db.one("SELECT meta FROM projects WHERE id=?", (pid,))["meta"]
@@ -337,9 +367,12 @@ def add_youtube(b: YT):
         info = sources.youtube_info(b.url)
     except ValueError as e:
         err(400, str(e))
-    prefs = {k: v for k, v in (("min_dur", b.min_dur), ("max_dur", b.max_dur)) if v}
+    prefs = {k: v for k, v in (("min_dur", b.min_dur), ("max_dur", b.max_dur), ("part_len", b.part_len), ("range_start", b.range_start),
+                                ("range_end", b.range_end)) if v}
+    if b.mode == "series":
+        prefs["mode"] = "series"
     pid = new_project(info["title"] or f"YouTube {info['video_id']}", "youtube", source_url=b.url, status="processing",
-                      meta={"title": info["title"], "author": info["author"], "video_id": info["video_id"], "warning": info.get("warning", ""), "yt_authorized": bool(b.authorized)}, prefs=prefs)
+                      meta={"title": info["title"], "author": info["author"], "video_id": info["video_id"], "warning": info.get("warning", ""), "yt_authorized": bool(b.authorized), "yt_mode": b.yt_download if b.yt_download in ("full", "segments") else "full", "auto_delete": bool(b.auto_delete)}, prefs=prefs)
 
     fn = youtube_job(pid, info, b.url, bool(b.authorized))
     return {"project_id": pid, "job_id": jobs.submit("analyze", fn, project_id=pid), "info": info,
@@ -388,6 +421,34 @@ def romanize_project(pid: str):
     p = get_project(pid)
     db.update("projects", pid, analysis={**(p.get("analysis") or {}), "devanagari": False}, prefs={**(p.get("prefs") or {}), "language": "hinglish"})
     return {"converted_words": n}
+
+
+@router.post("/projects/{pid}/download-full")
+def download_full_video(pid: str, body: Optional[dict] = None):
+    """Fetch the whole video once for a YouTube project the user has authorized, then process it like an upload."""
+    p = get_project(pid)
+    if p["source_type"] != "youtube":
+        err(400, "Only YouTube projects use this.")
+    meta = p.get("meta") or {}
+    if not meta.get("yt_authorized"):
+        err(400, "Confirm that you own this video or have permission to use it first.")
+    if active_job(pid):
+        err(409, "Already processing.")
+    try:
+        info = sources.youtube_info(p["source_url"])
+    except ValueError as e:
+        err(400, str(e))
+    db.update("projects", pid, status="processing", error=None, meta={**meta, "yt_mode": "full", "auto_delete": bool((body or {}).get("auto_delete", True)), "source_deleted": False})
+    return {"job_id": jobs.submit("analyze", youtube_job(pid, info, p["source_url"], True), project_id=pid)}
+
+
+@router.delete("/projects/{pid}/source")
+def delete_source(pid: str):
+    """Delete the downloaded video to free disk space (clips, transcript and exports stay)."""
+    get_project(pid)
+    if active_job(pid):
+        err(409, "Still processing.")
+    return {"deleted": pipeline.cleanup_source(pid)}
 
 
 @router.post("/projects/{pid}/authorize-download")
@@ -499,6 +560,10 @@ class Reanalyze(BaseModel):
     min_dur: float = 30
     max_dur: float = 60
     max_clips: int = 8
+    mode: str = "moments"  # moments | series
+    part_len: Optional[float] = None
+    range_start: Optional[float] = None
+    range_end: Optional[float] = None
 
 
 @router.post("/projects/{pid}/reanalyze")
@@ -506,11 +571,14 @@ def reanalyze(pid: str, b: Reanalyze):
     p = get_project(pid)
     if active_job(pid):
         err(409, "Already processing.")
-    if b.min_dur < 5 or b.max_dur > 180 or b.min_dur >= b.max_dur:
+    if b.mode == "series":
+        if not b.part_len or not 10 <= b.part_len <= 180:
+            err(400, "Part length must be between 10 and 180 seconds.")
+    elif b.min_dur < 5 or b.max_dur > 180 or b.min_dur >= b.max_dur:
         err(400, "Duration range must be between 5 and 180 seconds, with min below max.")
     if not pipeline.load_transcript(pid):
         err(400, "There is no transcript yet.")
-    db.update("projects", pid, prefs={**(p.get("prefs") or {}), **b.model_dump()})
+    db.update("projects", pid, prefs={**(p.get("prefs") or {}), **{k: v for k, v in b.model_dump().items() if v is not None}})
     return {"job_id": jobs.submit("analyze", pipeline.reanalyze_job(pid), project_id=pid)}
 
 

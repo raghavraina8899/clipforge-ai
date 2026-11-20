@@ -315,3 +315,37 @@ def analyze(words: list, duration: float, title: str, min_d: float, max_d: float
         out["note"] = f"AI provider failed ({e}) - used the built-in analyzer instead."
         log.warning("llm analysis failed: %s", e)
         return out
+
+
+def series(words: list, duration: float, part_len: float, start: float = 0.0, end: Optional[float] = None, max_parts: int = 200) -> dict:
+    """Cut the speech into consecutive parts in story order, each ending on a sentence boundary (Part 1/N ... N/N)."""
+    max_len = part_len * 1.3
+    sents = [s for s in sentences(words) if s["s"] >= start - 0.01 and (end is None or s["e"] <= end + 0.01)]
+    if not sents:
+        return {"clips": [], "summary": "", "engine": "builtin", "note": "No speech was found in the chosen range."}
+    groups, cur = [], []
+    for s in sents:
+        if cur and s["e"] - cur[0]["s"] > max_len:
+            groups.append(cur); cur = []
+        cur.append(s)
+        if cur[-1]["e"] - cur[0]["s"] >= part_len:
+            groups.append(cur); cur = []
+    if cur:
+        if groups and cur[-1]["e"] - cur[0]["s"] < 0.4 * part_len and (cur[-1]["e"] - groups[-1][0]["s"]) <= max_len * 1.2:
+            groups[-1] += cur
+        else:
+            groups.append(cur)
+    note = ""
+    if len(groups) > max_parts:
+        groups, note = groups[:max_parts], f"Only the first {max_parts} parts are shown; use the start/end range for the rest."
+    n, clips, prev_end = len(groups), [], 0.0
+    for i, g in enumerate(groups, 1):
+        s0 = max(prev_end, max(0.0, g[0]["s"] - 0.1))
+        e0 = min(duration or g[-1]["e"] + 1, g[-1]["e"] + 0.3)
+        comps, ev, _ = score_window(g)
+        clips.append(dict(start=round(s0, 2), end=round(e0, 2), score=total(comps), scores=comps, kind="Series",
+                          title=f"Part {i}/{n}", hook=f"Part {i}", caption=_title(g[0]["text"]),
+                          reason=f"Part {i} of {n}: the story in order, about {e0 - s0:.0f} s, cut at a sentence break.",
+                          settings_patch={"hook": {"enabled": True, "text": f"Part {i}", "duration": 2.0, "style": "pop"}}))
+        prev_end = e0
+    return {"clips": clips, "summary": summarize_heuristic(words), "engine": "series", "note": note}

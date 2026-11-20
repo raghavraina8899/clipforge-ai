@@ -67,9 +67,10 @@ def make_clips(pid: str, result: dict) -> int:
     db.delete("clips", "project_id=?", (pid,))
     defaults = clip_defaults()
     for i, c in enumerate(result["clips"]):
+        st = settings_store._merge(defaults, c["settings_patch"]) if c.get("settings_patch") else defaults
         db.insert("clips", dict(id=db.new_id(), project_id=pid, idx=i, title=c["title"], start=c["start"], end=c["end"],
                                 score=c["score"], scores=c["scores"], reason=c["reason"], hook=c["hook"], caption=c["caption"],
-                                kind=c["kind"], selected=1, settings=defaults, social=None, exports=[], created_at=time.time()))
+                                kind=c["kind"], selected=1, settings=st, social=None, exports=[], created_at=time.time()))
     return len(result["clips"])
 
 
@@ -82,10 +83,14 @@ def run_analysis(pid: str, ctx: JobCtx, p0: float = 0, p1: float = 100) -> None:
     ctx.update("Analyzing for engaging moments", p0 + (p1 - p0) * 0.1,
                "Scoring candidate moments" if not __import__("app.services.llm", fromlist=["x"]).active_provider() else "Asking the AI provider to rank moments")
     meta = proj.get("meta") or {}
-    res = analyze.analyze(tr["words"], meta.get("duration") or (tr["words"][-1]["e"] if tr["words"] else 0),
-                          proj["name"], float(prefs["min_dur"]), float(prefs["max_dur"]), int(prefs["max_clips"]))
+    dur_total = meta.get("duration") or (tr["words"][-1]["e"] if tr["words"] else 0)
+    if prefs.get("mode") == "series":
+        res = analyze.series(tr["words"], dur_total, float(prefs.get("part_len") or 60), float(prefs.get("range_start") or 0),
+                             float(prefs["range_end"]) if prefs.get("range_end") else None)
+    else:
+        res = analyze.analyze(tr["words"], dur_total, proj["name"], float(prefs["min_dur"]), float(prefs["max_dur"]), int(prefs["max_clips"]))
     n = make_clips(pid, res)
-    db.update("projects", pid, analysis={"summary": res["summary"], "engine": res["engine"], "note": res["note"], "clips": n,
+    db.update("projects", pid, analysis={"summary": res["summary"], "engine": res["engine"], "note": res["note"], "clips": n, "mode": prefs.get("mode", "moments"),
                                           "language": tr.get("language"), "word_timing": tr.get("word_timing", "precise"),
                                           "devanagari": any(has_dev(w["w"]) for w in tr["words"])},
               language=tr.get("language"))
@@ -152,6 +157,42 @@ def reanalyze_job(pid: str):
     return fn
 
 
+class ScaledCtx:
+    """Run a sub-task (ingest) inside part of a bigger job's progress range."""
+    def __init__(self, ctx, lo: float, hi: float):
+        self._c, self._lo, self._hi = ctx, lo, hi
+
+    def update(self, stage=None, progress=None, message=None):
+        self._c.update(stage, None if progress is None else self._lo + progress * (self._hi - self._lo) / 100, message)
+
+    def __getattr__(self, k):
+        return getattr(self._c, k)
+
+
+def cleanup_source(pid: str) -> bool:
+    """Delete the downloaded source video (and its preview proxy). Exports, transcript and clips are kept."""
+    proj = db.one("SELECT * FROM projects WHERE id=?", (pid,))
+    if not proj or proj["source_type"] != "youtube" or not proj.get("video_path"):
+        return False
+    P = paths(pid)
+    Path(proj["video_path"]).unlink(missing_ok=True)
+    P["proxy"].unlink(missing_ok=True)
+    shutil.rmtree(P["thumbs"], ignore_errors=True)
+    db.update("projects", pid, video_path=None, proxy_path=None, meta={**(proj.get("meta") or {}), "source_deleted": True})
+    return True
+
+
+def maybe_cleanup(pid: str) -> None:
+    """Auto-delete the downloaded video once every selected clip has been exported (if the user asked for that)."""
+    proj = db.one("SELECT * FROM projects WHERE id=?", (pid,))
+    if not proj or not (proj.get("meta") or {}).get("auto_delete") or proj["source_type"] != "youtube":
+        return
+    clips = db.many("SELECT selected, exports FROM clips WHERE project_id=?", (pid,))
+    sel = [c for c in clips if c["selected"]]
+    if sel and all(c["exports"] for c in sel):
+        cleanup_source(pid)
+
+
 # ------------------------------------------------------------------ URL-only preview segments
 
 import threading
@@ -196,7 +237,7 @@ def preview_job(clip_id: str):
         from .services import ytdl
         clip = db.one("SELECT * FROM clips WHERE id=?", (clip_id,))
         proj = db.one("SELECT * FROM projects WHERE id=?", (clip["project_id"],))
-        if not ((proj.get("meta") or {}).get("yt_authorized") and proj.get("source_url")):
+        if not ((proj.get("meta") or {}).get("yt_authorized") and proj.get("source_url")) or (proj.get("meta") or {}).get("yt_mode", "segments") != "segments":
             raise RuntimeError("Downloading is not enabled for this project.")
         pid = proj["id"]
         f, j = preview_paths(pid, clip_id)
@@ -235,7 +276,8 @@ def render_job(clip_id: str, settings_override: Optional[dict] = None):
         clip = db.one("SELECT * FROM clips WHERE id=?", (clip_id,))
         proj = db.one("SELECT * FROM projects WHERE id=?", (clip["project_id"],))
         has_video = bool(proj.get("video_path")) and Path(proj["video_path"]).exists()
-        segment_mode = not has_video and (proj.get("meta") or {}).get("yt_authorized") and proj.get("source_url")
+        segment_mode = (not has_video and (proj.get("meta") or {}).get("yt_authorized") and proj.get("source_url")
+                        and (proj.get("meta") or {}).get("yt_mode", "segments") == "segments")
         if not has_video and not segment_mode:
             raise RuntimeError("The original video file is not attached to this project, so it cannot be rendered. Attach your video file first.")
         P = paths(proj["id"])
@@ -294,6 +336,7 @@ def render_job(clip_id: str, settings_override: Optional[dict] = None):
         entry = {"file": out.name, "srt": srt.name, "at": time.time(), **info}
         fresh = db.one("SELECT exports FROM clips WHERE id=?", (clip_id,))
         db.update("clips", clip_id, exports=(fresh["exports"] or []) + [entry], settings=st)
+        maybe_cleanup(proj["id"])
         return entry
     return fn
 

@@ -130,3 +130,30 @@ def download_audio(url: str, out_dir: Path, on_progress: Optional[Callable[[floa
     if not files:
         raise DownloadError("The audio download produced no file.")
     return files[0]
+
+
+def download_full(url: str, out_dir: Path, name: str, max_height: int = 1080,
+                  on_progress: Optional[Callable[[float], None]] = None, cancelled: Optional[Callable[[], bool]] = None) -> Path:
+    """Download the whole video ONCE (one request instead of one per clip). Public videos only."""
+    try:
+        import yt_dlp  # noqa: F401
+    except ImportError:
+        raise DownloadError("yt-dlp is not installed. Run ./start.sh again to install it.")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    def hook(d):
+        if cancelled and cancelled():
+            raise DownloadError("Cancelled.")
+        if on_progress and d.get("status") == "downloading":
+            tot = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+            if tot:
+                on_progress(min(100.0, d.get("downloaded_bytes", 0) / tot * 100))
+
+    opts = {"format": f"bv*[height<={max_height}]+ba/b[height<={max_height}]/b", "merge_output_format": "mp4",
+            "outtmpl": str(out_dir / f"{name}.%(ext)s"), "noplaylist": True, "quiet": True, "no_warnings": True, "noprogress": True,
+            "progress_hooks": [hook], "retries": 3, "socket_timeout": 30, "overwrites": True}
+    _download(opts, url)
+    files = [f for f in sorted(out_dir.glob(f"{name}.*")) if f.suffix in (".mp4", ".mkv", ".webm")]
+    if not files:
+        raise DownloadError("The download finished but no video file was produced.")
+    return files[0]
