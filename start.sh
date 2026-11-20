@@ -45,7 +45,7 @@ if ! ls backend/fonts/*.ttf >/dev/null 2>&1; then say "Downloading free open-sou
 # ---- frontend
 cd frontend
 [ -d node_modules ] || { nosync node_modules; say "Installing frontend dependencies…"; npm install --no-audit --no-fund --loglevel=error; }
-if [ "${CLIPFORGE_DEV:-0}" = "1" ]; then FRONT="npm run dev"; else
+if [ "${HOOKHUNT_DEV:-${CLIPFORGE_DEV:-0}}" = "1" ]; then FRONT="npm run dev"; else
   if [ ! -f .next.nosync/BUILD_ID ] || [ -n "$(find app components lib package.json tailwind.config.ts -newer .next.nosync/BUILD_ID -print -quit)" ]; then say "Building the interface…"; npm run build >/dev/null; fi
   FRONT="npm run start"
 fi

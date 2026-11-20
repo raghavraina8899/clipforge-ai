@@ -168,3 +168,18 @@ def test_brand_kit_api_roundtrip(client):
     assert pipeline.clip_defaults()["brand"]["id"] == "kk"                                                              # new clips start with the default kit
     client.put("/api/brand", json={"brands": [], "default": ""})
     assert client.get(f"/api/brand/file/{name}").status_code == 404                                                     # deleting the kit removes its files
+
+
+def test_waveform_endpoint(client, test_video):
+    import shutil
+    add_project("pw")
+    add_clip("cw", "pw")
+    P = pipeline.paths("pw")
+    shutil.copy(test_video, P["proxy"])
+    r = client.get("/api/clips/cw/waveform?start=0&end=20&bins=200")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["bins"] == 200 and len(d["peaks"]) == 200 and all(0 <= x <= 1 for x in d["peaks"]) and max(d["peaks"]) > 0.05   # the test video carries speech
+    assert client.get("/api/clips/cw/waveform?start=500&end=520").status_code == 400                                          # outside the video
+    assert client.get("/api/clips/cw/waveform?start=-5&end=3&bins=50").json()["start"] == 0                                    # clamped to the video
+    client.delete("/api/projects/pw")

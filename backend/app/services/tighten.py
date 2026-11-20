@@ -5,7 +5,7 @@ import re
 from typing import Optional
 
 FILLERS_DEFAULT = "um, umm, uh, uhh, uhm, er, erm, ah, hmm, hm, mm, mmm"
-DEFAULTS = {"enabled": False, "silence": True, "silence_max": 0.7, "keep": 0.2, "fillers": True, "filler_words": FILLERS_DEFAULT}
+DEFAULTS = {"enabled": False, "silence": True, "silence_max": 0.7, "keep": 0.2, "fillers": True, "filler_words": FILLERS_DEFAULT, "manual": []}
 
 
 def _norm(w: str) -> str:
@@ -22,40 +22,41 @@ def plan(words: list, start: float, end: float, opts: Optional[dict], fps: float
     o = merged_opts(opts)
     dur = max(0.0, end - start)
     out = {"keep": [(0.0, dur)], "removed": [], "pauses": 0, "fillers": 0, "removed_seconds": 0.0, "new_duration": dur, "duration": dur}
-    if not o["enabled"] or dur < 2:
+    # manual cuts (drawn on the timeline, absolute video time) always apply; the automatic pause/filler cutting only when switched on
+    manual = [(max(start, float(m["start"])), min(end, float(m["end"]))) for m in (o.get("manual") or []) if isinstance(m, dict) and "start" in m and "end" in m]
+    manual = [(a, b) for a, b in manual if b - a > 0.05]
+    if (not o["enabled"] and not manual) or dur < 2:
         return out
-    ws = [w for w in words if w["e"] > start and w["s"] < end and w.get("w", "") != ""]
-    if not ws:
-        return out
-    fillers = {_norm(x) for x in re.split(r"[,\n]", o["filler_words"] or "") if _norm(x)} if o["fillers"] else set()
-    cuts: list = []
-    kept = []
-    nf = 0
-    for w in ws:
-        if _norm(w["w"]) in fillers:
-            a, b = max(start, w["s"] + 0.02), min(end, w["e"] - 0.02)
-            if b - a > 0.05:
-                cuts.append((a, b))
-                nf += 1
-                continue
-        kept.append(w)
-    npause = 0
-    if o["silence"] and kept:
-        thr, keep = float(o["silence_max"]), float(o["keep"])
-        prev = start
-        for i, w in enumerate(kept):
-            gap = w["s"] - prev
-            if gap > thr:
-                a = start if i == 0 else prev + keep
-                b = w["s"] - keep
-                if b - a > 0.1:
+    cuts: list = list(manual)
+    nf = npause = 0
+    ws = [w for w in words if w["e"] > start and w["s"] < end and w.get("w", "") != ""] if o["enabled"] else []
+    if ws:
+        fillers = {_norm(x) for x in re.split(r"[,\n]", o["filler_words"] or "") if _norm(x)} if o["fillers"] else set()
+        kept = []
+        for w in ws:
+            if _norm(w["w"]) in fillers:
+                a, b = max(start, w["s"] + 0.02), min(end, w["e"] - 0.02)
+                if b - a > 0.05:
                     cuts.append((a, b))
-                    npause += 1
-            prev = max(prev, w["e"])
-        tail = end - prev
-        if tail > thr and end - (prev + keep) > 0.1:
-            cuts.append((prev + keep, end))
-            npause += 1
+                    nf += 1
+                    continue
+            kept.append(w)
+        if o["silence"] and kept:
+            thr, keep = float(o["silence_max"]), float(o["keep"])
+            prev = start
+            for i, w in enumerate(kept):
+                gap = w["s"] - prev
+                if gap > thr:
+                    a = start if i == 0 else prev + keep
+                    b = w["s"] - keep
+                    if b - a > 0.1:
+                        cuts.append((a, b))
+                        npause += 1
+                prev = max(prev, w["e"])
+            tail = end - prev
+            if tail > thr and end - (prev + keep) > 0.1:
+                cuts.append((prev + keep, end))
+                npause += 1
     cuts.sort()
     merged: list = []
     for a, b in cuts:

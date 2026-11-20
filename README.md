@@ -45,7 +45,7 @@ Not supported directly. Install **WSL** (Ubuntu) and follow the Linux steps insi
 * Everything runs on your computer. No account, no API key, no subscription.
 * The first time you process a video, a speech model (~480 MB) downloads once; after that it works offline (except YouTube-URL mode).
 * Your videos and projects stay on your computer, outside the app folder: `~/Library/Application Support/HookHunt` on a Mac (`~/.local/share/hookhunt` on Linux), so iCloud/Dropbox never uploads them. Set `HOOKHUNT_DATA=/some/folder` to change it. Use the **Storage** page in the app to see what is stored and free up space.
-* If something fails the app shows the reason; see Troubleshooting below. Logs: `<data folder>/logs/clipforge.log`.
+* If something fails the app shows the reason; see Troubleshooting below. Logs: `<data folder>/logs/clipforge.log` (the file name predates the rename).
 
 ## Run it (details)
 
@@ -59,12 +59,12 @@ Not supported directly. Install **WSL** (Ubuntu) and follow the Linux steps insi
 | Node.js 18+ | `brew install node` | nodejs.org |
 | FFmpeg **with libass** (captions) | `brew install ffmpeg-full` (plain `ffmpeg` has no `subtitles` filter) | `apt install ffmpeg` |
 
-Set `CLIPFORGE_DEV=1 ./start.sh` for development mode (hot reload).
+Set `HOOKHUNT_DEV=1 ./start.sh` for development mode (hot reload).
 
 ## Workflow
 
 1. **Create New Clips** → upload a video (drag & drop, real upload progress), paste a YouTube URL, or record an authorized live stream.
-2. HookHunt probes the file, builds a 720p preview, extracts audio, transcribes (English / Hindi / auto) and scores moments. Every progress bar is measured from the real work.
+2. HookHunt probes the file, builds a 720p preview, extracts audio, transcribes (English / Hindi / Hinglish / auto) and scores moments. Every progress bar is measured from the real work.
 3. Pick clips (or regenerate with another length: 15–30 / 30–45 / 45–60 / 60–90 / custom), tweak start/end, captions, layout, hook, enhancements.
 4. **Render** → H.264/H.265 MP4 + SRT; download per clip or as one ZIP (clips, subtitles, thumbnails, social text).
 
@@ -82,7 +82,7 @@ Set `CLIPFORGE_DEV=1 ./start.sh` for development mode (hot reload).
 * **Hindi / Hinglish**: the *Spoken language* option tells Whisper what to listen for. *Hindi* gives Devanagari captions; *Hinglish* gives Hindi in English letters (a Hinglish prompt plus a built-in romanizer, so output is natural but can differ from how you'd spell it; fix words in the Captions tab). Projects already transcribed in Devanagari have a one-click convert button.
 * **Speech speed**: HookHunt picks the fastest speech engine for the computer automatically: **Apple GPU** (MLX Whisper) on Apple-chip Macs, **NVIDIA GPU** (CUDA) where one is present, otherwise the **CPU** with batching. Voice-activity detection skips silence and music. On an M4 Mac: about 27x real time on the GPU (a 20-hour video in roughly 45 minutes) versus about 12x on the CPU. You can override the engine and model, and run a speed test, in AI Settings. If the chosen engine fails, the next one is used and the project says so.
 * **Brand kit** (sidebar): save per-channel kits with your own logo (position, size, opacity), an intro and an outro (a short video up to 30 s, or an image shown 2.5 s) and a caption style. Pick a kit on any clip (Layout & look); a default kit can apply to new clips. The logo is drawn on the video; intro/outro are joined by a second pass (a little slower), and captions/SRT shift past the intro. Uploaded files live in the app's data folder and are deleted when no kit uses them.
-* **Tighten** (Clip tab): optionally cuts long pauses and filler words ("um", "uh") using the transcript's word timing; leading/trailing silence is trimmed too. Cuts are frame-exact, sound and picture stay in sync, captions and the SRT move onto the shorter timeline, and the preview skips the cut parts. Off by default. Speech models often omit "um"/"uh" from the transcript, so filler cutting only catches fillers that were transcribed; pause cutting always works.
+* **Tighten** (Clip tab): optionally cuts long pauses and filler words ("um", "uh") using the transcript's word timing; leading/trailing silence is trimmed too. Cuts are frame-exact, sound and picture stay in sync, captions and the SRT move onto the shorter timeline, and the preview skips the cut parts. Off by default. Groundwork for a future timeline editor exists in the API (manual cut ranges in `tighten.manual`, and `GET /api/clips/{id}/waveform`), but there is no timeline interface yet. Speech models often omit "um"/"uh" from the transcript, so filler cutting only catches fillers that were transcribed; pause cutting always works.
 * **Music / SFX** are never added automatically; only files you upload.
 * Only process content you own or are permitted to use.
 
@@ -92,10 +92,15 @@ Set `CLIPFORGE_DEV=1 ./start.sh` for development mode (hot reload).
 frontend/  Next.js 15 + React 19 + TypeScript + Tailwind, shadcn-style UI primitives, lucide icons
 backend/   FastAPI (Python)
   app/routers/api.py      REST API (projects, clips, settings, jobs, downloads)
-  app/jobs.py             background job runner (thread pool, persisted real progress, cancel)
-  app/pipeline.py         ingest → proxy → transcribe → analyze → clips; render job; thumbnails
-  app/services/           ffmpeg · transcribe (faster-whisper) · analyze · llm (Gemini/Ollama) ·
-                          captions (ASS/SRT + presets) · vision (OpenCV) · render (filter graph) · social · sources (YouTube/live)
+  app/jobs.py             job scheduler (limited parallel slots, persisted real progress, working cancel)
+  app/pipeline.py         ingest → proxy → transcribe → analyze → clips; render job; thumbnails; cleanup
+  app/storage.py          Storage page: lists and deletes only items it listed itself
+  app/doctor.py           System check (also `./doctor.sh`)
+  app/services/           ffmpeg · transcribe + engine (Apple GPU / CUDA / CPU) · analyze · llm (Gemini/Ollama) ·
+                          captions (ASS/SRT + presets) · vision (OpenCV faces, facecam) · render (filter graph) ·
+                          tighten (pause/filler cuts) · brand (logo, intro/outro) · waveform · hinglish · social ·
+                          sources + ytdl (YouTube, live) · settings_store
+  tests/                  pytest suite (see Tests below)
 (data folder)  SQLite DB, project folders (originals, proxy, transcript.json, exports/), logs, uploaded audio
 ```
 

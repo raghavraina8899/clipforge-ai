@@ -79,3 +79,23 @@ def test_words_inside_a_cut_are_dropped():
 
 def test_select_expression():
     assert tighten.select_expr([(0, 1.5), (3, 4)]) == "gte(t,0.0000)*lt(t,1.5000)+gte(t,3.0000)*lt(t,4.0000)"
+
+
+def test_manual_cuts_work_even_with_auto_tightening_off():
+    words = W([("a", 0, 0.5), ("b", 0.5, 1.0), ("c", 8, 8.5)])
+    p = tighten.plan(words, 0, 10, {"enabled": False, "manual": [{"start": 3.0, "end": 6.0}]})
+    assert p["removed_seconds"] == pytest.approx(3.0, abs=0.1) and p["pauses"] == 0 and p["new_duration"] == pytest.approx(7.0, abs=0.1)
+
+
+def test_manual_and_automatic_cuts_merge_without_double_counting():
+    words = W([("hello", 0.0, 0.5), ("there", 0.5, 1.0), ("again", 6.0, 6.5), ("friends", 6.5, 7.5)])
+    auto = tighten.plan(words, 0, 8, {"enabled": True})
+    both = tighten.plan(words, 0, 8, {"enabled": True, "manual": [{"start": 2.0, "end": 4.0}]})   # lies inside the automatic pause cut
+    assert both["removed_seconds"] == pytest.approx(auto["removed_seconds"], abs=0.1)
+    extra = tighten.plan(words, 0, 8, {"enabled": True, "manual": [{"start": 6.2, "end": 7.0}]})  # cuts into speech: more removed
+    assert extra["removed_seconds"] > auto["removed_seconds"] + 0.5
+
+
+def test_manual_cuts_outside_the_clip_are_ignored_and_tiny_ones_dropped():
+    p = tighten.plan(W([("a", 0, 1)]), 10, 20, {"manual": [{"start": 0, "end": 5}, {"start": 12, "end": 12.02}]})
+    assert p["removed"] == []

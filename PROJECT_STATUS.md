@@ -2,74 +2,52 @@
 
 _Last updated: 2026-11-20_
 
-## What we are building
-A free, local AI video clipper: video in → transcript → best moments → vertical clips with animated word-timed captions → watermark-free MP4 export. No paid services; Gemini is optional with the user's own key.
+## What it is
+A free, local AI video clipper. Give it a video you own (upload, YouTube link, or an authorized live stream) and it transcribes the speech, finds the best moments (or cuts the whole story into Part 1, Part 2…), and exports watermark-free vertical clips with word-timed animated captions. Everything runs on the user's computer; no paid service is required (Gemini / Ollama are optional).
 
-## Stack
-Next.js 15 / React 19 / TypeScript / Tailwind (frontend) · FastAPI + SQLite (backend) · FFmpeg (needs libass: `brew install ffmpeg-full`) · faster-whisper · OpenCV · optional Gemini / Ollama.
-Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
+## Stack and layout
+- **Frontend:** Next.js 15, React 19, TypeScript, Tailwind (own shadcn-style components).
+- **Backend:** FastAPI + SQLite, FFmpeg (needs libass), faster-whisper / MLX Whisper, OpenCV, yt-dlp, Pillow.
+- **Run:** `./start.sh` (Mac first-time setup: `./setup-mac.sh`). UI http://localhost:3000, API http://127.0.0.1:8000. Python 3.10+ (3.12 recommended).
+- **Data** lives outside the repo: `~/Library/Application Support/HookHunt` (Linux `~/.local/share/hookhunt`), override with `HOOKHUNT_DATA`. venv, node_modules and the build use `.nosync` folders so iCloud does not sync them.
+- `backend/app/`: `routers/api.py` (REST), `jobs.py` (scheduler), `pipeline.py` (import → transcribe → analyze → clips, render jobs), `storage.py`, `doctor.py`, `services/` (ffmpeg, transcribe, engine, analyze, captions, render, vision, tighten, brand, waveform, hinglish, social, sources, ytdl, llm, settings_store).
+- `backend/tests/` (tests), `backend/constraints.txt` (library version limits), `.github/workflows/tests.yml` (CI), `scripts/` (fonts), `doctor.sh`, `setup-mac.sh`.
 
-## Achieved and tested (against real generated videos)
-- Upload (streamed, real progress) → probe → 720p proxy → transcription (word timestamps) → clip suggestions with 6-part score
-- Re-analysis with new length range; manual clips; start/end editing; word/timing correction
-- Captions: 10 presets, full customization, ASS rendering (highlight/pop/reveal/fade/karaoke), hook + ending overlays, emoji overlays, SRT export
-- Layouts: smart face-following crop, center, blur background, colour fill, split-screen; zoom effects
-- Enhancements: brightness/contrast/saturation/sharpness, fades, loudness normalize, denoise, stabilize, user music/SFX
-- Export: H.264/H.265, 720p–4K (capped honestly by source), fps cap, per-export notes, SRT, thumbnails (Pillow), social text, ZIP
-- Live stream recording (start/pause/resume/stop) tested over UDP; page URLs (YouTube/Twitch…) refused
-- YouTube URL: metadata + public captions only (tested with a real URL); no video download
-- Gemini key handling (masked, chmod 600, header-only, not logged); AI output validation + fallback tested with simulated responses
-- UI pages: Dashboard, Create, Projects, project workspace/editor, Library, Subtitle Styles, AI Settings, Video Settings, About — browser-tested with Playwright
+## Features (all built; how each was verified)
+| Area | What exists | Verification |
+|---|---|---|
+| Input | Upload (streamed, real progress), YouTube link, authorized live stream (start/pause/resume/stop) | Upload, live (UDP) and link parsing in tests/manual; real YouTube partly (see gaps) |
+| YouTube | Metadata + public captions by default. With an ownership tick: full video downloaded once (or per-clip segments), auto-deleted after export; time range read from `?t=` / `start=` / `end=` | Logic + stand-in downloads tested; segment previews/exports verified by the user on real videos |
+| Analysis | Built-in rule-based moment finder with 6-part score; optional Gemini / Ollama (validated, falls back); Series mode (Part i/N, optional range) | Unit tests + simulated AI answers |
+| Transcription | Auto-picked engine: Apple GPU (MLX) ≈ 24–27× real time on an M4, NVIDIA CUDA, else batched CPU ≈ 12–15×; VAD skips silence; English, Hindi, Hinglish (Hindi in English letters) | Measured on this Mac; CUDA path untested |
+| Captions | 10 presets + full customization, word highlight/pop/reveal/fade/karaoke, hook + ending, emoji overlays (macOS), show/hide, hide-by-time-range, SRT | Real renders in tests |
+| Framing | Smart face crop, center, blur, fill, split-screen, streamer facecam + content (overlay detected and cropped out), zoom | Synthetic videos + user check on real stream |
+| Enhance | Colour, sharpness, fades, loudness, denoise, stabilize, user music/SFX | Real renders |
+| Tighten | Optional pause + filler-word cutting (frame-exact, sound/picture in sync, captions/SRT follow, preview skips cuts); off by default | End to end with real transcription |
+| Brand kit | Per-channel logo, intro/outro (video or image), caption style, default kit | Real renders (durations, sync, logo present/absent) |
+| Export | H.264/H.265, honest resolution/fps limits with notes, thumbnails, social text, one-folder ZIP bundle + optional cleanup after download | Real renders + API tests |
+| Management | Projects, clip library, Storage page (per-item sizes, select/delete), cancel everywhere, retry, System check (`./doctor.sh` + step-by-step UI + copyable report) | Tests + browser checks |
+| UI | Dark glass design, 3D tilt cards, splash + page loaders, animated cube/film-to-MP4 export loader, consistent full-width layouts | Browser checks |
 
-## Added 2026-11-20: URL-only automatic clips
-- YouTube tab has an ownership/permission checkbox. When ticked: moments are found from captions (or temporary audio download if none), and on render only that clip's time range is downloaded with yt-dlp, transcribed, rendered, then deleted (`services/ytdl.py`, `pipeline.render_job` segment mode).
-- Tested: the segment → transcribe → render → delete logic, with the download step replaced by a local file cut. **Not tested: the real yt-dlp download from YouTube** (needs a video the owner may use; yt-dlp on Python 3.9 is pinned to an older release).
-- Live preview in URL-only mode: opening a clip downloads a small 480p copy of just that segment (cached under `preview/`), re-transcribes it for exact caption timing, and shows it in the editor; it is deleted when the clip is exported. Tested with a fake download only.
-- Known limits: no thumbnail frames for URL-only projects.
+## Quality gates
+- `cd backend && .venv/bin/python -m pytest -m "not slow"` → **75 tests**, ~25 s (logic, scheduler, API, storage safety, real FFmpeg renders). `-m slow` → real upload + transcription (1 test).
+- GitHub Actions runs the fast tests on Linux and macOS plus a type check and build of the frontend on every push; the last run was green.
+- Working rules for this repo: no AI/Claude attribution in commits or files; check `jobs` (no queued/running) before restarting the app; run the tests before pushing.
 
-## Added 2026-11-20: facecam + content layout
-- "Smart (auto)": if a small face overlay near an edge/corner is detected (streamer facecam), export stacks face on top and full gameplay/screen below (share slider, fit-with-blur or fill, optional blur of the facecam inside the lower content). Vlogs (large central face) keep the face-follow crop. Explicit options: "Facecam + content", "Face-follow crop".
-- Facecam overlay border is detected from the video (strongest straight edge near the face box, snapped to frame corners); the face panel shows only the overlay, and the overlay is cropped out of the gameplay area (blurred only if it floats away from the edges). Captions default to the face panel so gameplay stays clear (option: seam / bottom).
-- Tested on synthetic gameplay+facecam videos (export + browser preview); the corner case is exact, a floating box far from edges is approximate. Real GTA project: user-verified preview.
-- Backend now runs on Python 3.12 (needed for current yt-dlp); `av<17` pinned for faster-whisper.
+## Groundwork present but not finished
+- **Timeline editor:** the API side exists (`tighten.manual` = manual cut ranges that the renderer and `/clips/{id}/tighten-plan` honour; `GET /api/clips/{id}/waveform` returns audio peaks). **There is no timeline user interface yet.**
 
-## Added 2026-11-20: full download + series mode + caption controls
-- YouTube (authorized): full video downloaded once -> normal local pipeline; auto-delete source after all selected clips are exported (exports kept); re-download button.
-- Series mode: consecutive "Part i/N" clips at sentence boundaries, optional start/stop range, "Part N" hook label. Tested with a stand-in download (not a real YouTube download).
-- Captions: Hinglish language option + convert button, show/hide captions, hide captions for chosen time ranges (preview, export, SRT).
-- Data moved out of iCloud (see above).
+## Known gaps / not verified
+- Real YouTube downloads depend on YouTube accepting the network: home connections get "confirm you're not a bot" blocks (a phone hotspot worked). Full-video and audio-only modes were not run against real YouTube after the last fixes. yt-dlp must be kept current (`pip install -U 'yt-dlp[default]'`).
+- Gemini and Ollama were never tried with a real key / model (only simulated answers).
+- NVIDIA/CUDA transcription is written but untested (no NVIDIA machine).
+- Windows is not supported yet (bash scripts, symlinks, Mac-only emoji font). Plan: cross-platform Python launcher + GitHub Windows runner. Linux is covered by CI for tests only.
+- Hindi/Hinglish accuracy checked only with a synthetic voice; active-speaker switching only with a static two-face test.
+- Emoji captions need macOS' Apple Color Emoji font.
+- Speech models often omit "um"/"uh", so filler-word cutting only catches fillers that were transcribed (pause cutting always works).
 
-## Added 2026-11-20: storage manager, rename, redesign
-- App renamed HookHunt (data folder migrates automatically from the old name). New look: deep slate + electric blue/cyan, glass surfaces, 3D tilt cards, animated counters.
-- Storage page lists everything on disk per project (source, preview copy, temp clips, exports, whole project), leftovers, logs, uploaded audio and speech models with sizes; select / select all / safe-only and delete.
-- System check (About page, `./doctor.sh`) + copyable diagnostic report; cancel now kills frozen downloads; audio-only analysis downloads the whole audio then cuts the range.
+## Backlog (ideas, not started)
+Timeline editor UI · join clips into a compilation · auto-zoom on emphasis · translated captions · jobs page · desktop notifications · better face detector (MediaPipe-class) · desktop installer · Windows support · browser-login option for YouTube downloads (opt-in, account risk) · uploading straight to YouTube/Instagram (not advised).
 
-## Cancel behaviour (fixed 2026-11-20)
-- Job scheduler rewritten: cancelled queued jobs never start or flip back to "running"; cancelling a frozen job frees its run slot immediately (a frozen download used to block every later job); ghost jobs can be cancelled; leaving a clip cancels its not-yet-started preview download.
-- Cancel buttons: processing/analysis, export, clip preview, bundle (render all & download), file uploads. Cancelled imports and failed/cancelled projects have **Try again** (YouTube, uploads, live recordings). A cancelled export deletes its partial file.
-- Tested: queue/cancel scheduler, import cancel + retry, mid-export cancel. Not tested with a real YouTube preview download.
-
-## Speed work (2026-11-20)
-- Transcription engine auto-detected: Apple silicon -> MLX Whisper (GPU), NVIDIA -> faster-whisper CUDA, else faster-whisper CPU batched; falls back down that list. VAD-gated windows (10 min) so silence/music is skipped and progress/cancel work on any length. AI Settings: engine + model (adds `turbo`) + speed test; System check lists the engine.
-- Measured on M4 (10 min speech, small model): old CPU 10.0x, CPU batched 15x, Apple GPU 24-27x; turbo on GPU 10.2x. Accuracy matched (English and Hinglish checked). NVIDIA path written but NOT tested here (no NVIDIA machine).
-- Cost: +1.1 GB Python packages on Apple silicon (PyTorch comes with mlx-whisper); extra models download on first use.
-
-## Tests, locked versions, tighten (2026-11-20)
-- `backend/tests` (62 fast tests + 1 slow real-import test): pure logic, job scheduler, API, storage safety, FFmpeg renders (formats, layouts, HEVC tag, caption hiding, tighten). `backend/constraints.txt` limits library versions (used via `-c` in requirements.txt). GitHub Actions workflow runs tests on Linux + macOS and builds the frontend.
-- Tighten (silence/filler removal): `services/tighten.py`, wired into `render.py`; off by default. Found and avoided an FFmpeg quirk: `loudnorm` after a cut-and-join truncates audio, so normalisation runs before the cuts. Verified end to end with real transcription (video and audio both 25.2 s, SRT remapped, preview skips the cuts).
-
-## Brand kit (2026-11-20)
-- `services/brand.py`, `/brand` page, clip editor picker, API `/api/brand*`. Logo overlay in the main graph; intro/outro joined in a second pass (`add_intro_outro`). Tested with real renders (durations, sync, logo present/absent). A test caught that ffprobe "reads" text files as images, so images are validated with Pillow.
-
-## Not yet verified / known gaps
-- Real YouTube segment/audio download end to end
-- Gemini with a real key and Ollama with a real model (only simulated)
-- Hindi transcription accuracy and Devanagari caption rendering on real Hindi audio
-- Active-speaker switching on real speech (only static two-face test)
-- Emoji overlay render on an exported clip; Hook/Ending and Social tabs not exercised in browser
-- MediaPipe not integrated (OpenCV Haar only); no hardware (VideoToolbox) encode option
-- Next steps: real-world test with a talking-head video, polish UI edge cases, optional MediaPipe, tests/CI
-
-## Notes
-- Servers are stopped after testing; start with `./start.sh`.
-- Data lives outside the repo: `~/Library/Application Support/HookHunt` (macOS) so iCloud does not sync it; venv/node_modules/build use `.nosync` folders. Fonts are downloaded by `scripts/fetch_fonts.sh`.
+## History (2026-11-20, one long build session)
+Built the full app (upload → transcription → clips → captions → export) → YouTube URL mode with temporary downloads → facecam layout → series mode → Hinglish → caption hide/range → bundle download + cleanup → storage manager → HookHunt rename and redesign → system check → cancel/scheduler fixes → faster transcription (auto engine) → tests + locked versions + CI → tighten → brand kit → waveform/manual-cut groundwork. Decisions and measurements are in the commit messages.

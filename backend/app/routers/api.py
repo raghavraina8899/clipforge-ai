@@ -899,6 +899,33 @@ def framing(cid: str, layout: str = "smart"):
     return out
 
 
+@router.get("/clips/{cid}/waveform")
+def clip_waveform(cid: str, start: float, end: float, bins: int = 800):
+    """Audio peaks for the timeline editor. Times are on the video's own timeline."""
+    from ..services import waveform
+    c = get_clip(cid)
+    p = get_project(c["project_id"])
+    P = pipeline.paths(p["id"])
+    meta = p.get("meta") or {}
+    s0, e0 = max(0.0, start), min(float(meta.get("duration") or 1e9), end)
+    if P["proxy"].exists():
+        src, off = P["proxy"], 0.0
+    else:  # URL-only mode: only the temporary preview segment exists
+        pv = pipeline.preview_info(c)
+        if not pv:
+            err(400, "No video is available for this clip yet.")
+        src, off = pipeline.preview_paths(p["id"], cid)[0], pv["seg_start"]
+        s0, e0 = max(s0, pv["seg_start"]), min(e0, pv["seg_start"] + pv["duration"])
+    e0 = min(e0, s0 + 900)
+    if e0 - s0 < 0.5:
+        err(400, "That time range is outside the video.")
+    try:
+        pk = waveform.peaks(src, s0 - off, e0 - off, bins)
+    except ffmpeg.MediaError as e:
+        err(500, str(e))
+    return {"start": round(s0, 3), "end": round(e0, 3), "bins": len(pk), "peaks": pk}
+
+
 @router.post("/clips/{cid}/plan")
 def plan(cid: str, body: dict):
     c = get_clip(cid)
