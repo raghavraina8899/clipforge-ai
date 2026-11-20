@@ -1,0 +1,44 @@
+name: tests
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install FFmpeg (with caption support)
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then sudo apt-get update && sudo apt-get install -y ffmpeg; else brew install ffmpeg-full; fi
+          ffmpeg -hide_banner -filters | grep -E " subtitles " || echo "no libass in this FFmpeg"
+      - name: Install Python packages
+        run: pip install -r backend/requirements-dev.txt
+      - name: Run tests
+        working-directory: backend
+        run: python -m pytest -q -m "not slow"
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx tsc --noEmit
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend

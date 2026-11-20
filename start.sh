@@ -33,7 +33,7 @@ if [ -x backend/.venv/bin/python ]; then
   if [ "$have_minor" -lt 10 ] && [ "$want_minor" -ge 10 ]; then say "Upgrading the Python environment to $($PY --version)…"; rm -rf backend/.venv backend/.venv.nosync; fi
 fi
 if [ ! -x backend/.venv/bin/python ]; then nosync backend/.venv; say "Creating Python environment ($($PY --version))…"; "$PY" -m venv backend/.venv; fi
-REQ_HASH=$(shasum backend/requirements.txt | cut -d' ' -f1)
+REQ_HASH=$(cat backend/requirements.txt backend/constraints.txt | shasum | cut -d' ' -f1)
 if [ ! -f backend/.venv/.req_hash ] || [ "$(cat backend/.venv/.req_hash)" != "$REQ_HASH" ]; then
   say "Installing backend dependencies (first run takes a few minutes)…"
   backend/.venv/bin/pip install -q --upgrade pip

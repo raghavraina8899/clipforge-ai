@@ -155,6 +155,14 @@ def _title(text: str) -> str:
     return t[:1].upper() + t[1:]
 
 
+def _no_overlap(clips: list) -> None:
+    """Padding added around each clip can make neighbours overlap by a fraction of a second: split the overlap at the midpoint."""
+    for a, b in zip(clips, clips[1:]):
+        if b["start"] < a["end"]:
+            mid = round((a["end"] + b["start"]) / 2, 2)
+            a["end"], b["start"] = mid, mid
+
+
 def heuristic(words: list, duration: float, min_d: float, max_d: float, max_clips: int = 8) -> list:
     sents = sentences(words)
     if not sents:
@@ -190,6 +198,7 @@ def heuristic(words: list, duration: float, min_d: float, max_d: float, max_clip
                            reason=reason[0].upper() + reason[1:], title=_title(run[0]["text"]), hook=_title(best_hook["text"]),
                            caption=_title(run[0]["text"]), kind=kind))
     chosen.sort(key=lambda c: c["start"])
+    _no_overlap(chosen)
     return chosen
 
 
@@ -310,6 +319,7 @@ def analyze(words: list, duration: float, title: str, min_d: float, max_d: float
             out["note"] = "The AI returned no usable clips; showing built-in analyzer results instead."
             return out
         picked.sort(key=lambda c: c["start"])
+        _no_overlap(picked)
         return {"clips": picked, "summary": summary or out["summary"], "engine": prov, "note": ""}
     except llm.LLMError as e:
         out["note"] = f"AI provider failed ({e}) - used the built-in analyzer instead."
