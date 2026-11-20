@@ -4,6 +4,7 @@ import { HardDrive, Loader2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react
 import { api } from "@/lib/api";
 import { Badge, Button, Card, CardContent, Notice, PageHeader } from "@/components/ui";
 import { cn, fmtBytes } from "@/lib/utils";
+import { PageLoader } from "@/components/loader";
 
 interface Item { id: string; group: string; project_id: string | null; kind: string; label: string; detail: string; bytes: number; note: string; danger: boolean; busy: boolean }
 interface Data { items: Item[]; total: number; disk_free: number; disk_total: number }
@@ -63,6 +64,7 @@ export default function Storage() {
         <div className="flex-1" />
         <Button variant="danger" disabled={!sel.size || busy} onClick={run}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}Free up {fmtBytes(freed)}</Button>
       </div>
+      {!d && !err && <PageLoader label="Measuring storage" />}
       {d && !d.items.length && <Card className="p-10 text-center text-sm text-muted-foreground">Nothing stored yet.</Card>}
       <div className="space-y-4">
         {groups.map(([g, list]) => (

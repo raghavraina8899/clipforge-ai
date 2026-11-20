@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Download, FileVideo, Loader2, Plus, RefreshCw, Trash2, Wand2, Archive } from "lucide-react";
 import { API, api, Clip, Job, Project, upload, useFonts, useJob } from "@/lib/api";
 import { Badge, Button, Card, Input, JobBar, Notice, scoreColor } from "@/components/ui";
-import { JobLoader } from "@/components/loader";
+import { JobLoader, PageLoader } from "@/components/loader";
 import { StatusBadge } from "@/components/status-badge";
 import { ClipEditor } from "@/components/clip-editor";
 import { DurationPicker, DurationValue } from "@/components/duration-picker";
@@ -72,7 +72,7 @@ export default function ProjectPage() {
     };
   }, [refresh]);
 
-  if (!d) return <div>{err ? <Notice kind="error">{err}</Notice> : <p className="text-sm text-muted-foreground">Loading…</p>}</div>;
+  if (!d) return <div>{err ? <Notice kind="error">{err}</Notice> : <PageLoader label="Opening your project" />}</div>;
   const { project: p, clips } = d;
   const active = clips.find((c) => c.id === activeId) || null;
   const selected = clips.filter((c) => c.selected);

@@ -4,6 +4,7 @@ import { Check, KeyRound, Loader2, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Notice, PageHeader, Select } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/loader";
 
 interface Model { id: string; name: string; description: string }
 
@@ -15,7 +16,7 @@ export default function AISettings() {
   useEffect(() => { load().catch((e) => setMsg({ k: "error", t: e.message })); api("/system").then(setSys).catch(() => {}); }, []);
   const put = async (partial: any) => setS(await api("/settings", { method: "PUT", body: partial }));
   const run = async (name: string, fn: () => Promise<void>) => { setBusy(name); setMsg(null); try { await fn(); } catch (e: any) { setMsg({ k: "error", t: e.message }); } setBusy(""); };
-  if (!s) return msg ? <Notice kind="error">{msg.t}</Notice> : null;
+  if (!s) return msg ? <Notice kind="error">{msg.t}</Notice> : <PageLoader label="Loading AI settings" />;
   const ai = s.ai;
   const provider = (id: string, title: string, desc: string, disabled = false) => (
     <button disabled={disabled} onClick={() => put({ ai: { provider: id } })} className={cn("rounded-lg border p-3 text-left transition-colors disabled:opacity-50", ai.provider === id ? "border-primary bg-primary/10" : "hover:border-primary/50")}>

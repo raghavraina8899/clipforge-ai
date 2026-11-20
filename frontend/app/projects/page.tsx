@@ -7,6 +7,7 @@ import { Button, Card, Input, Notice, PageHeader } from "@/components/ui";
 import { StatusBadge } from "@/components/status-badge";
 import { fmtTime, timeAgo } from "@/lib/utils";
 import { TiltCard } from "@/components/fx";
+import { PageLoader } from "@/components/loader";
 
 export default function Projects() {
   const [list, setList] = useState<Project[] | null>(null);
@@ -25,6 +26,7 @@ export default function Projects() {
       <PageHeader title="My Projects" subtitle="Every video you process becomes a project you can reopen, edit and export again."
         actions={<Link href="/create"><Button><Plus className="h-4 w-4" />New project</Button></Link>} />
       {err && <div className="mb-4"><Notice kind="error">{err}</Notice></div>}
+      {!list && !err && <PageLoader label="Loading your projects" />}
       {list && !list.length && <Card className="p-10 text-center text-sm text-muted-foreground">No projects yet.</Card>}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {list?.map((p) => (

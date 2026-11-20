@@ -93,3 +93,19 @@ export function JobLoader({ job, variant = "process", onCancel, compact = false,
     </div>
   );
 }
+
+/** Full-area loader shown while a page fetches its data (also after a refresh). Fades in after 150 ms so fast loads do not flash. */
+export function PageLoader({ label = "Loading" }: { label?: string }) {
+  return (
+    <div className="flex min-h-[55vh] flex-col items-center justify-center gap-6 opacity-0 animate-fade-up" style={{ animationDelay: "150ms" }}>
+      <Cube size={72} />
+      <div className="text-center">
+        <div className="flex items-center justify-center gap-1 text-base font-medium">{label}
+          <span className="ml-0.5 inline-flex gap-1">{[0, 1, 2].map((i) => <i key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-cyan" style={{ animationDelay: `${i * 0.15}s` }} />)}</span></div>
+        <div className="mx-auto mt-3 h-1.5 w-56 overflow-hidden rounded-full bg-muted shadow-[inset_0_1px_2px_hsl(0_0%_0%/.5)]">
+          <div className="h-full w-1/3 animate-[loadbar_1.3s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-primary to-cyan shadow-[0_0_12px_hsl(var(--primary))]" />
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -4,10 +4,12 @@ import { Check } from "lucide-react";
 import { api, ClipSettings } from "@/lib/api";
 import { Button, Card, CardContent, CardHeader, CardTitle, Label, Notice, PageHeader, Select, Slider, Switch } from "@/components/ui";
 
+import { PageLoader } from "@/components/loader";
+
 export default function VideoSettings() {
   const [v, setV] = useState<ClipSettings | null>(null); const [err, setErr] = useState(""); const [saved, setSaved] = useState(false);
   useEffect(() => { api<any>("/settings").then((s) => setV(s.video)).catch((e) => setErr(e.message)); }, []);
-  if (!v) return err ? <Notice kind="error">{err}</Notice> : null;
+  if (!v) return err ? <Notice kind="error">{err}</Notice> : <PageLoader label="Loading video settings" />;
   const upd = (p: any) => setV({ ...v, ...Object.fromEntries(Object.entries(p).map(([k, val]: any) => [k, typeof val === "object" ? { ...(v as any)[k], ...val } : val])) } as ClipSettings);
   const save = async () => { try { await api("/settings", { method: "PUT", body: { video: v } }); setSaved(true); setTimeout(() => setSaved(false), 2000); } catch (e: any) { setErr(e.message); } };
   const en = v.enhance, ex = v.export;

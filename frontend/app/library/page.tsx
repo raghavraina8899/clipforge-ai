@@ -5,6 +5,7 @@ import { Download, FileText } from "lucide-react";
 import { api, Clip, url } from "@/lib/api";
 import { Badge, Button, Card, Notice, PageHeader, scoreColor } from "@/components/ui";
 import { fmtBytes, fmtTime, timeAgo } from "@/lib/utils";
+import { PageLoader } from "@/components/loader";
 
 export default function Library() {
   const [clips, setClips] = useState<Clip[] | null>(null); const [err, setErr] = useState(""); const [only, setOnly] = useState(true);
@@ -15,6 +16,7 @@ export default function Library() {
       <PageHeader title="Clip Library" subtitle="Every clip across all projects. Open a clip to edit it or export it again with different settings."
         actions={<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} />Only exported clips</label>} />
       {err && <Notice kind="error">{err}</Notice>}
+      {!clips && !err && <PageLoader label="Loading your clips" />}
       {clips && !list.length && <Card className="p-10 text-center text-sm text-muted-foreground">{only ? "No exported clips yet. Render a clip from any project and it will appear here." : "No clips yet."}</Card>}
       <div className="space-y-3">
         {list.map((c) => (

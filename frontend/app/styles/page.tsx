@@ -5,6 +5,8 @@ import { api, CaptionStyle, useFonts } from "@/lib/api";
 import { CaptionControls, PresetGallery, StyleSample } from "@/components/caption-editor";
 import { Button, Card, CardContent, CardHeader, CardTitle, Notice, PageHeader } from "@/components/ui";
 
+import { PageLoader } from "@/components/loader";
+
 export default function Styles() {
   const fonts = useFonts();
   const [style, setStyle] = useState<CaptionStyle | null>(null);
@@ -14,7 +16,7 @@ export default function Styles() {
     setStyle({ ...base, ...s.caption });
   })).catch((e) => setErr(e.message)); }, []);
   const save = async () => { try { await api("/settings", { method: "PUT", body: { caption: style } }); setSaved(true); setTimeout(() => setSaved(false), 2000); } catch (e: any) { setErr(e.message); } };
-  if (!style) return err ? <Notice kind="error">{err}</Notice> : null;
+  if (!style) return err ? <Notice kind="error">{err}</Notice> : <PageLoader label="Loading subtitle styles" />;
   return (
     <div>
       <PageHeader title="Subtitle Styles" subtitle="Choose the look new clips start with. You can still change the style of any individual clip in its editor." actions={<Button onClick={save}>{saved ? <><Check className="h-4 w-4" />Saved</> : "Save as default"}</Button>} />

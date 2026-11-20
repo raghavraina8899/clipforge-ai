@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Film, Scissors, Download, FolderKanban, Plus, Loader2 } from "lucide-react";
 import { api, url, Job, Project } from "@/lib/api";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Notice, PageHeader } from "@/components/ui";
-import { JobLoader } from "@/components/loader";
+import { JobLoader, PageLoader } from "@/components/loader";
 import { fmtTime, timeAgo } from "@/lib/utils";
 import { Counter, TiltCard } from "@/components/fx";
 import { StatusBadge } from "@/components/status-badge";
@@ -23,6 +23,7 @@ export default function Dashboard() {
     load();
     return () => { stop = true; };
   }, []);
+  if (!s && !err) return <PageLoader label="Loading your dashboard" />;
   const stat = (icon: React.ReactNode, label: string, v: number | undefined) => (
     <TiltCard><div className="flex items-center gap-4 p-5">
       <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/30 to-cyan/20 text-cyan shadow-[inset_0_1px_0_hsl(0_0%_100%/.15),0_8px_18px_-8px_hsl(211_100%_55%/.7)]">{icon}</div>
