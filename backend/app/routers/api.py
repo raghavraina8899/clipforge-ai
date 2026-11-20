@@ -87,6 +87,19 @@ def system():
             "fonts": [f for f in FONTS_DIR.glob("*.ttf")].__len__()}
 
 
+@router.get("/doctor")
+def doctor_checks(network: int = 1):
+    from .. import doctor
+    return {"checks": doctor.run_checks(bool(network))}
+
+
+@router.get("/doctor/report")
+def doctor_report():
+    from fastapi.responses import PlainTextResponse
+    from .. import doctor
+    return PlainTextResponse(doctor.report(True))
+
+
 @router.get("/settings")
 def get_settings():
     return settings_store.public()
@@ -324,18 +337,20 @@ def youtube_job(pid: str, info: dict, url: str, authorized: bool):
             try:
                 if not wav.exists():  # a retry reuses the finished audio of an earlier attempt (long videos take hours)
                     ctx.update("Downloading audio for analysis", 40, f"{t['reason']} Fetching audio only (temporary).")
-                    af = ytdl.download_audio(url, work, lambda p: ctx.update("Downloading audio for analysis", 40 + p * 0.1, f"Downloading audio {p:.0f}%"), lambda: ctx.cancelled.is_set(),
-                                             start=rs0, end=re0)
+                    shutil.rmtree(work, ignore_errors=True)  # never resume a stale partial file
+                    # whole audio, downloaded the normal (fast) way; the chosen range is cut out below. A ranged download is throttled to ~1x real time.
+                    af = ytdl.download_audio(url, work, lambda p: ctx.update("Downloading audio for analysis", 40 + p * 0.1, f"Downloading audio {p:.0f}%"), lambda: ctx.cancelled.is_set())
                     ctx.update("Preparing audio", 50, "Converting audio for the speech model")
                     part = work / "audio_part.wav"
-                    ffmpeg.run(["-i", af, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", part])
+                    cut = (["-ss", f"{rs0:.3f}"] if rs0 else []) + (["-t", f"{re0 - rs0:.3f}"] if re0 else [])
+                    ffmpeg.run([*cut, "-i", af, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", part], (re0 - rs0) if re0 else 0, ctx)
                     part.replace(wav)
                     af.unlink(missing_ok=True)
                 dur = ffmpeg.audio_duration(wav)
                 ctx.update("Transcribing speech", 55, f"Transcribing {dur / 3600:.1f} h of audio locally (roughly 9x faster than real time)")
                 tr = transcribe.transcribe(wav, P["transcript"], settings_store.load()["transcription"]["model"],
                                            pf.get("language") or "auto", dur,
-                                           lambda p, m_: ctx.update("Transcribing speech", 55 + p * 0.3, m_), offset=rs0 if re0 else 0.0)
+                                           lambda p, m_: ctx.update("Transcribing speech", 55 + p * 0.3, m_), offset=rs0)
             except ytdl.DownloadError as e:
                 db.update("projects", pid, status="error", error=str(e))
                 raise RuntimeError(str(e))
@@ -344,7 +359,7 @@ def youtube_job(pid: str, info: dict, url: str, authorized: bool):
                 db.update("projects", pid, status="error", error=("Cancelled. Press Try again to continue (the downloaded audio is kept)." if isinstance(e, Cancelled) else f"{e} (the downloaded audio is kept, so Try again resumes from the transcription step)."))
                 raise
             shutil.rmtree(work, ignore_errors=True)  # success: remove the temporary audio
-            meta["duration"] = round((re0 if re0 else dur), 1)
+            meta["duration"] = round((re0 if re0 else rs0 + dur), 1)
             db.update("projects", pid, meta=meta)
             if not tr["words"]:
                 db.update("projects", pid, status="ready", analysis={"summary": "", "engine": "builtin", "clips": 0, "note": "No speech was detected.", "access": {"transcript": True, "reason": ""}})

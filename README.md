@@ -101,6 +101,8 @@ Logs: `<data folder>/logs/clipforge.log`. To add a caption preset edit `PRESETS`
 
 ## Troubleshooting
 
+**First, run the system check.** In the app: *About → Run system check* (it lists what is wrong and how to fix it, and has a *Copy diagnostic report* button to send to whoever helps you). If the app will not even start: `./doctor.sh` in the project folder.
+
 * *"FFmpeg has no subtitles filter"* → `brew uninstall ffmpeg && brew install ffmpeg-full`.
 * *Port in use* → another ClipForge/dev server is running on 8000 or 3000. Close the other Terminal window running it, or restart your Mac.
 * *"permission denied" running a script* → run `chmod +x setup-mac.sh start.sh scripts/fetch_fonts.sh` once.

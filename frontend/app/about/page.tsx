@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle, PageHeader } from "@/components/ui";
+import { SystemCheck } from "@/components/system-check";
 
 const Item = ({ t, children }: { t: string; children: React.ReactNode }) => <li><b className="text-foreground">{t}</b> <span className="text-muted-foreground">{children}</span></li>;
 
@@ -6,6 +7,7 @@ export default function About() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader title="About ClipForge AI" subtitle="A free, local tool that turns long videos into Shorts and Reels with word-timed captions. No watermark, no subscription, no cloud." />
+      <SystemCheck />
       <Card><CardHeader><CardTitle>What runs where</CardTitle></CardHeader><CardContent><ul className="space-y-2 text-sm">
         <Item t="FFmpeg">renders every export (layout, enhancement, burned-in captions, H.264/H.265).</Item>
         <Item t="faster-whisper">transcribes speech with word timestamps, English and Hindi, on your CPU.</Item>

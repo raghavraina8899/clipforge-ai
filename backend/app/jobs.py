@@ -63,8 +63,11 @@ def submit(kind: str, fn: Callable[[JobCtx], Optional[dict]], project_id=None, c
         except Cancelled:
             db.update("jobs", jid, status="cancelled", stage="Cancelled", message="Cancelled by user")
         except Exception as e:  # noqa: BLE001 - surfaced to the user verbatim
-            log.error("job %s (%s) failed: %s\n%s", jid, kind, e, traceback.format_exc())
-            db.update("jobs", jid, status="error", stage="Failed", error=str(e) or e.__class__.__name__)
+            if ctx.cancelled.is_set():  # killed on purpose: not a failure
+                db.update("jobs", jid, status="cancelled", stage="Cancelled", message="Cancelled by user")
+            else:
+                log.error("job %s (%s) failed: %s\n%s", jid, kind, e, traceback.format_exc())
+                db.update("jobs", jid, status="error", stage="Failed", error=str(e) or e.__class__.__name__)
         finally:
             _ctxs.pop(jid, None)
 
@@ -72,12 +75,39 @@ def submit(kind: str, fn: Callable[[JobCtx], Optional[dict]], project_id=None, c
     return jid
 
 
+def _kill_children(match: str) -> int:
+    """Kill direct child processes (e.g. the ffmpeg that yt-dlp starts) whose command line mentions `match`."""
+    import os
+    import signal
+    import subprocess
+    n = 0
+    out = subprocess.run(["ps", "-A", "-o", "pid=,ppid=,command="], capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) == 3 and parts[1] == str(os.getpid()) and match in parts[2]:
+            try:
+                os.kill(int(parts[0]), signal.SIGKILL)
+                n += 1
+            except OSError:
+                pass
+    return n
+
+
 def cancel(jid: str) -> bool:
+    """Cancel now: flag the worker, kill hung child processes, and show 'cancelled' immediately even if the worker thread is stuck."""
     ctx = _ctxs.get(jid)
-    if ctx:
-        ctx.cancel()
-        return True
-    return False
+    if not ctx:
+        return False
+    ctx.cancel()
+    row = db.one("SELECT project_id, kind FROM jobs WHERE id=?", (jid,))
+    if row and row.get("project_id"):
+        _kill_children(row["project_id"])
+    db.update("jobs", jid, status="cancelled", stage="Cancelled", message="Cancelled by user")
+    if row and row.get("project_id") and row["kind"] in ("ingest", "analyze"):
+        p = db.one("SELECT status FROM projects WHERE id=?", (row["project_id"],))
+        if p and p["status"] == "processing":
+            db.update("projects", row["project_id"], status="error", error="Cancelled. Press Try again to start again.")
+    return True
 
 
 def clean_temp_downloads() -> None:
