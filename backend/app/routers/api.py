@@ -841,6 +841,20 @@ def plan(cid: str, body: dict):
     return render.plan(p["meta"], st, None)
 
 
+@router.post("/clips/{cid}/tighten-plan")
+def tighten_plan(cid: str, body: Optional[dict] = None):
+    """What tightening would cut from this clip with the given options: used for the live summary and for skipping the cuts in the preview."""
+    from ..services import tighten
+    c = get_clip(cid)
+    p = get_project(c["project_id"])
+    opts = {**(pipeline.clip_settings(c).get("tighten") or {}), **((body or {}).get("settings") or {})}
+    words = pipeline.clip_words(c["project_id"], c["start"], c["end"])
+    fps = float(((p.get("meta") or {}).get("fps")) or 30)
+    plan = tighten.plan(words, c["start"], c["end"], opts, fps)
+    return {"removed": [[a, b] for a, b in plan["removed"]], "pauses": plan["pauses"], "fillers": plan["fillers"], "removed_seconds": plan["removed_seconds"],
+            "new_duration": plan["new_duration"], "duration": plan["duration"]}
+
+
 @router.post("/clips/{cid}/render")
 def render_one(cid: str, body: Optional[dict] = None):
     c = get_clip(cid)
@@ -906,10 +920,15 @@ def srt(cid: str):
     c = get_clip(cid)
     words = pipeline.clip_words(c["project_id"], c["start"], c["end"])
     rel = [{"w": w["w"], "s": w["s"] - c["start"], "e": w["e"] - c["start"]} for w in words]
+    cs = pipeline.clip_settings(c)
+    rel = captions.filter_hidden(rel, (cs.get("caption") or {}).get("hidden"))
+    from ..services import tighten
+    plan = tighten.plan(words, c["start"], c["end"], cs.get("tighten") or {})
+    rel = tighten.remap_words(rel, plan["removed"])
     d = pipeline.paths(c["project_id"])["work"]
     d.mkdir(exist_ok=True)
     f = d / f"{cid}.srt"
-    f.write_text(captions.build_srt(captions.filter_hidden(rel, (pipeline.clip_settings(c).get("caption") or {}).get("hidden"))), encoding="utf-8")
+    f.write_text(captions.build_srt(rel), encoding="utf-8")
     return FileResponse(f, filename=f"{re.sub(r'[^A-Za-z0-9]+', '-', c['title'])[:40] or 'clip'}.srt", media_type="application/x-subrip")
 
 

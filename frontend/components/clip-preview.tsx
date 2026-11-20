@@ -19,8 +19,8 @@ function lerp(points: number[][], t: number, idx: number): number {
   return points[points.length - 1][idx];
 }
 
-export function ClipPreview({ src, srcW, srcH, start, end, settings, words, framing, onTime, seekTo }: {
-  src: string; srcW: number; srcH: number; start: number; end: number; settings: ClipSettings; words: Word[]; framing: Framing | null; onTime?: (t: number) => void; seekTo?: { t: number; n: number };
+export function ClipPreview({ src, srcW, srcH, start, end, settings, words, framing, onTime, seekTo, skip }: {
+  src: string; srcW: number; srcH: number; start: number; end: number; settings: ClipSettings; words: Word[]; framing: Framing | null; onTime?: (t: number) => void; seekTo?: { t: number; n: number }; skip?: number[][];
 }) {
   const vref = useRef<HTMLVideoElement>(null);
   const cref = useRef<HTMLCanvasElement>(null);
@@ -31,8 +31,8 @@ export function ClipPreview({ src, srcW, srcH, start, end, settings, words, fram
   const [a, b] = ASPECT[settings.format] || [9, 16];
   const ar = a / b;
   const dur = Math.max(0.1, end - start);
-  const S = useRef({ settings, framing, start, end, dur, srcW, srcH });
-  S.current = { settings, framing, start, end, dur, srcW, srcH };
+  const S = useRef({ settings, framing, start, end, dur, srcW, srcH, skip: skip || [] });
+  S.current = { settings, framing, start, end, dur, srcW, srcH, skip: skip || [] };
 
   const draw = useCallback(() => {
     const v = vref.current, c = cref.current; if (!v || !c) return;
@@ -121,6 +121,10 @@ export function ClipPreview({ src, srcW, srcH, start, end, settings, words, fram
     const loop = () => {
       draw();
       const rel = v.currentTime - S.current.start;
+      if (!v.paused && S.current.skip.length) {  // tightening is on: jump over the parts the export will cut out
+        const iv = S.current.skip.find(([a, b]) => rel >= a && rel < b - 0.03);
+        if (iv) { v.currentTime = S.current.start + iv[1]; }
+      }
       setT(rel); onTime?.(rel);
       if (v.currentTime >= S.current.end - 0.03) { v.pause(); v.currentTime = S.current.start; setPlaying(false); }
       raf = requestAnimationFrame(loop);

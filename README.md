@@ -81,6 +81,7 @@ Set `CLIPFORGE_DEV=1 ./start.sh` for development mode (hot reload).
 * **Emoji** in captions are composited as image overlays (libass cannot render colour emoji); this needs macOS' Apple Color Emoji font and is skipped with a notice elsewhere.
 * **Hindi / Hinglish**: the *Spoken language* option tells Whisper what to listen for. *Hindi* gives Devanagari captions; *Hinglish* gives Hindi in English letters (a Hinglish prompt plus a built-in romanizer, so output is natural but can differ from how you'd spell it; fix words in the Captions tab). Projects already transcribed in Devanagari have a one-click convert button.
 * **Speech speed**: HookHunt picks the fastest speech engine for the computer automatically: **Apple GPU** (MLX Whisper) on Apple-chip Macs, **NVIDIA GPU** (CUDA) where one is present, otherwise the **CPU** with batching. Voice-activity detection skips silence and music. On an M4 Mac: about 27x real time on the GPU (a 20-hour video in roughly 45 minutes) versus about 12x on the CPU. You can override the engine and model, and run a speed test, in AI Settings. If the chosen engine fails, the next one is used and the project says so.
+* **Tighten** (Clip tab): optionally cuts long pauses and filler words ("um", "uh") using the transcript's word timing; leading/trailing silence is trimmed too. Cuts are frame-exact, sound and picture stay in sync, captions and the SRT move onto the shorter timeline, and the preview skips the cut parts. Off by default. Speech models often omit "um"/"uh" from the transcript, so filler cutting only catches fillers that were transcribed; pause cutting always works.
 * **Music / SFX** are never added automatically; only files you upload.
 * Only process content you own or are permitted to use.
 
@@ -99,6 +100,15 @@ backend/   FastAPI (Python)
 
 The UI talks to the API at `http://127.0.0.1:8000` (CORS limited to localhost:3000). Large uploads are streamed straight to disk.
 Logs: `<data folder>/logs/clipforge.log`. To add a caption preset edit `PRESETS` in `backend/app/services/captions.py`; to add an AI provider add a branch in `services/llm.py`.
+
+## Tests
+
+```bash
+cd backend && ../backend/.venv/bin/pip install -r requirements-dev.txt
+../backend/.venv/bin/python -m pytest -m "not slow"     # ~20 s: logic, API, scheduler, real FFmpeg renders
+../backend/.venv/bin/python -m pytest -m slow           # full import with real transcription (downloads a small model)
+```
+GitHub runs the same tests on Linux and macOS for every push, plus a type check and build of the website (`.github/workflows/tests.yml`). Library versions are limited in `backend/constraints.txt` so a surprise major update cannot break a fresh install.
 
 ## Troubleshooting
 

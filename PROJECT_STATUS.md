@@ -54,6 +54,10 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 - Measured on M4 (10 min speech, small model): old CPU 10.0x, CPU batched 15x, Apple GPU 24-27x; turbo on GPU 10.2x. Accuracy matched (English and Hinglish checked). NVIDIA path written but NOT tested here (no NVIDIA machine).
 - Cost: +1.1 GB Python packages on Apple silicon (PyTorch comes with mlx-whisper); extra models download on first use.
 
+## Tests, locked versions, tighten (2026-11-20)
+- `backend/tests` (62 fast tests + 1 slow real-import test): pure logic, job scheduler, API, storage safety, FFmpeg renders (formats, layouts, HEVC tag, caption hiding, tighten). `backend/constraints.txt` limits library versions (used via `-c` in requirements.txt). GitHub Actions workflow runs tests on Linux + macOS and builds the frontend.
+- Tighten (silence/filler removal): `services/tighten.py`, wired into `render.py`; off by default. Found and avoided an FFmpeg quirk: `loudnorm` after a cut-and-join truncates audio, so normalisation runs before the cuts. Verified end to end with real transcription (video and audio both 25.2 s, SRT remapped, preview skips the cuts).
+
 ## Not yet verified / known gaps
 - Real YouTube segment/audio download end to end
 - Gemini with a real key and Ollama with a real model (only simulated)

@@ -102,3 +102,32 @@ def test_facecam_geometry():
     floating = render.facecam_geometry({"x": 700.0, "y": 300.0, "w": 400.0, "h": 300.0}, 1920, 1080, 1080, 1920, 0.4, True)
     assert floating["mode"] == "blur"                          # not on an edge: blurred instead of cropped out
     assert render.facecam_geometry(fc, 1920, 1080, 1080, 1920, 0.4, False)["mode"] == "keep"
+
+
+def test_tighten_cuts_pauses_and_keeps_sound_and_picture_in_sync(tmp_path, test_video, src):
+    need_captions()
+    # speech at 0-2 s, a 6 s pause, speech at 8-10 s inside a 12 s clip
+    words = ([{"w": f"one{i}", "s": 0.4 * i, "e": 0.4 * i + 0.4} for i in range(5)] + [{"w": f"two{i}", "s": 8.0 + 0.4 * i, "e": 8.4 + 0.4 * i} for i in range(5)])
+    st = pipeline.clip_defaults()
+    st["layout"], st["export"]["quality"] = "center", "small"
+    st["tighten"].update(enabled=True)
+    out = tmp_path / "t.mp4"
+    info = render.render_clip(test_video, src, None, {"start": 0.0, "end": 12.0}, st, words, out, tmp_path / "w")
+    j = probe_json(out)
+    v = next(s for s in j["streams"] if s["codec_type"] == "video")
+    a = next(s for s in j["streams"] if s["codec_type"] == "audio")
+    vd, ad = float(v["duration"]), float(a["duration"])
+    assert info["tightened"] and info["tightened"]["pauses"] >= 1
+    assert 4.0 < float(j["format"]["duration"]) < 5.5       # 2 s speech + short pause + 2 s speech + trimmed tail, not the 12 s source range
+    assert abs(vd - ad) < 0.1                                                                          # picture and sound still the same length
+    assert info["srt_words"][-1]["e"] <= info["duration"] + 0.1                                        # captions moved onto the shorter timeline
+    assert info["srt_words"][5]["s"] < 8.0 - 3                                                          # second speech block now starts much earlier
+
+
+def test_tighten_off_leaves_length_alone(tmp_path, test_video, src):
+    need_captions()
+    st = pipeline.clip_defaults()
+    st["layout"], st["export"]["quality"] = "center", "small"
+    out = tmp_path / "n.mp4"
+    info = render.render_clip(test_video, src, None, {"start": 0.0, "end": 6.0}, st, [{"w": "x", "s": 0.1, "e": 0.4}], out, tmp_path / "w")
+    assert info["tightened"] is None and abs(float(probe_json(out)["format"]["duration"]) - 6.0) < 0.3

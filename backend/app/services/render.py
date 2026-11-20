@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from ..config import ASSETS_DIR, FONTS_DIR
-from . import captions, ffmpeg, vision
+from . import captions, ffmpeg, tighten, vision
 
 log = logging.getLogger("render")
 ASPECTS = {"9:16": (9, 16), "1:1": (1, 1), "16:9": (16, 9), "4:5": (4, 5)}
@@ -124,6 +124,10 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
     work.mkdir(parents=True, exist_ok=True)
     start, end = float(clip["start"]), min(float(clip["end"]), src["duration"] or float(clip["end"]))
     dur = max(0.5, end - start)
+    # optional tightening: cut long pauses / filler words. dur stays the length of the source range; dur_out is the final length.
+    cut = tighten.plan(words, start, end, settings.get("tighten") or {}, float(src.get("fps") or 30))
+    cut_on = bool(cut["removed"])
+    dur_out = cut["new_duration"] if cut_on else dur
     st = copy.deepcopy(settings)
     en = st["enhance"]
     ex = st["export"]
@@ -237,7 +241,7 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
         pre = (",".join(chain) + ",") if chain else ""
         graph.append(f"[0:v]{pre}scale={W}:{H}:force_original_aspect_ratio=decrease:flags=lanczos,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=0x{color}[base]")
 
-    post = [f"fps={fps}"]
+    post = ([f"select='{tighten.select_expr(cut['keep'])}',setpts=N/FRAME_RATE/TB"] if cut_on else []) + [f"fps={fps}"]
     eqs = []
     if abs(en.get("brightness", 0)) > 1e-3:
         eqs.append(f"brightness={en['brightness']:.3f}")
@@ -253,11 +257,14 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
     if fi > 0:
         post.append(f"fade=t=in:st=0:d={fi:.2f}")
     if fo > 0:
-        post.append(f"fade=t=out:st={max(0, dur - fo):.2f}:d={fo:.2f}")
+        post.append(f"fade=t=out:st={max(0, dur_out - fo):.2f}:d={fo:.2f}")
 
     rel_words = [{"w": w["w"], "s": w["s"] - start, "e": w["e"] - start} for w in words if w["e"] > start and w["s"] < end]
-    rel_words = captions.filter_hidden(rel_words, (st.get("caption") or {}).get("hidden"))
-    ass, overlays = captions.build_ass(rel_words, st.get("caption"), W, H, dur, st.get("hook"), st.get("ending"))
+    rel_words = captions.filter_hidden(rel_words, (st.get("caption") or {}).get("hidden"))   # hidden ranges are on the original timeline
+    if cut_on:
+        rel_words = tighten.remap_words(rel_words, cut["removed"])
+        notes.append(f"Tightened: removed {cut['removed_seconds']:.1f} s ({cut['pauses']} pauses, {cut['fillers']} filler words); the clip is {dur_out:.1f} s instead of {dur:.1f} s.")
+    ass, overlays = captions.build_ass(rel_words, st.get("caption"), W, H, dur_out, st.get("hook"), st.get("ending"))
     (work / "captions.ass").write_text(ass, encoding="utf-8")
     fonts_link = work / "fonts"
     if fonts_link.is_symlink() or fonts_link.exists():
@@ -273,7 +280,7 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
     for k, ov in enumerate(overlays[:30]):
         png = work / f"emoji{k}.png"
         if _emoji_png(ov["emoji"], png, int(W * 0.11)):
-            inputs += ["-loop", "1", "-t", f"{dur:.2f}", "-i", str(png)]
+            inputs += ["-loop", "1", "-t", f"{dur_out:.2f}", "-i", str(png)]
             graph.append(f"[{last}][{nin}:v]overlay=x=(W-w)/2:y={max(0, ov['y']):.0f}:enable='between(t,{ov['start']:.2f},{ov['end']:.2f})'[v{k + 1}]")
             last = f"v{k + 1}"
             nin += 1
@@ -283,16 +290,17 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
     graph.append(f"[{last}]format=yuv420p[vout]")
 
     # ----- audio graph
-    achain = []
+    apre, apost = [], []   # apre: denoise + loudness (must run BEFORE any cut: loudnorm after a cut-and-join loses audio); apost: fades
     if src["has_audio"]:
         if en.get("denoise_audio") and enc.get("afftdn"):
-            achain.append("afftdn=nf=-25")
+            apre.append("afftdn=nf=-25")
         if en.get("normalize_audio", True):
-            achain.append("loudnorm=I=-14:TP=-1.5:LRA=11")
+            apre.append("loudnorm=I=-14:TP=-1.5:LRA=11")
         if fi > 0:
-            achain.append(f"afade=t=in:st=0:d={fi:.2f}")
+            apost.append(f"afade=t=in:st=0:d={fi:.2f}")
         if fo > 0:
-            achain.append(f"afade=t=out:st={max(0, dur - fo):.2f}:d={fo:.2f}")
+            apost.append(f"afade=t=out:st={max(0, dur_out - fo):.2f}:d={fo:.2f}")
+    achain = apre + apost
     extra = []
     for key, loop in (("music", True), ("sfx", False)):
         a = (st.get("audio") or {}).get(key)
@@ -306,11 +314,26 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
     if src["has_audio"] or extra:
         parts, labels = [], []
         if src["has_audio"]:
-            parts.append("[0:a]" + (",".join(achain) if achain else "anull") + "[a0]")
+            if cut_on:  # sample-accurate cuts with tiny fades so there are no clicks at the joins
+                keep = cut["keep"]
+                fade = lambda a, b: f"atrim={a:.4f}:{b:.4f},asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.006,afade=t=out:st={max(0.0, b - a - 0.006):.4f}:d=0.006"  # noqa: E731
+                head = "[0:a]"
+                if apre:
+                    parts.append("[0:a]" + ",".join(apre) + "[pre]")
+                    head = "[pre]"
+                if len(keep) == 1:
+                    parts.append(f"{head}{fade(*keep[0])}[cat]")
+                else:
+                    parts.append(f"{head}asplit={len(keep)}" + "".join(f"[s{i}]" for i in range(len(keep))))
+                    parts += [f"[s{i}]{fade(a, b)}[t{i}]" for i, (a, b) in enumerate(keep)]
+                    parts.append("".join(f"[t{i}]" for i in range(len(keep))) + f"concat=n={len(keep)}:v=0:a=1[cat]")
+                parts.append("[cat]" + (",".join(apost) if apost else "anull") + "[a0]")
+            else:
+                parts.append("[0:a]" + (",".join(achain) if achain else "anull") + "[a0]")
             labels.append("[a0]")
         for i, (idx, vol, loop) in enumerate(extra):
             lab = f"[x{i}]"
-            parts.append(f"[{idx}:a]volume={vol:.2f},atrim=0:{dur:.2f},asetpts=PTS-STARTPTS{lab}")
+            parts.append(f"[{idx}:a]volume={vol:.2f},atrim=0:{dur_out:.2f},asetpts=PTS-STARTPTS{lab}")
             labels.append(lab)
         if len(labels) > 1:
             parts.append("".join(labels) + f"amix=inputs={len(labels)}:duration=first:dropout_transition=0:normalize=0[aout]")
@@ -333,10 +356,11 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
     cmd = [*inputs, "-/filter_complex", "graph.txt", "-map", "[vout]"]
     if amap:
         cmd += ["-map", amap, "-c:a", "aac", "-b:a", "192k"]
-    cmd += [*vcodec, "-movflags", "+faststart", "-t", f"{dur:.3f}", str(Path(out_path).resolve())]
+    cmd += [*vcodec, "-movflags", "+faststart", "-t", f"{dur_out:.3f}", str(Path(out_path).resolve())]
 
     # cwd=work: relative captions/fonts/graph paths avoid every filter-escaping pitfall (and are thread-safe)
-    ffmpeg.run(cmd, dur, ctx, lambda p: on_progress and on_progress(10 + p * 0.9, "Rendering video"), cwd=work)
+    ffmpeg.run(cmd, dur_out, ctx, lambda p: on_progress and on_progress(10 + p * 0.9, "Rendering video"), cwd=work)
     return {"width": W, "height": H, "fps": fps, "resolution": pl["res"], "codec": codec, "quality": q,
-            "duration": round(dur, 2), "layout_used": layout, "notes": [n for n in notes if n],
-            "size": out_path.stat().st_size, "upscale": pl["upscale"]}
+            "duration": round(dur_out, 2), "layout_used": layout, "notes": [n for n in notes if n],
+            "size": out_path.stat().st_size, "upscale": pl["upscale"], "srt_words": rel_words,
+            "tightened": ({"removed_seconds": cut["removed_seconds"], "pauses": cut["pauses"], "fillers": cut["fillers"]} if cut_on else None)}

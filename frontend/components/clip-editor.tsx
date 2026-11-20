@@ -10,6 +10,8 @@ import { ThumbnailEditor } from "@/components/thumbnail-editor";
 import { ExportPanel } from "@/components/export-panel";
 import { fmtTime, parseTime } from "@/lib/utils";
 
+interface TightenPlan { removed: number[][]; pauses: number; fillers: number; removed_seconds: number; new_duration: number; duration: number }
+
 type Tab = "clip" | "captions" | "look" | "hook" | "social" | "thumb" | "export";
 const LABELS: Record<string, string> = { hook: "Opening hook", emotion: "Emotional impact", info: "Information value", engagement: "Engagement", standalone: "Standalone context", ending: "Ending quality" };
 
@@ -61,14 +63,24 @@ export function ClipEditor({ project, clip, fonts, patch, refresh }: { project: 
   }, [clip.id, clip.start, clip.end, st.layout, hasPreview, pv?.url]);
   const onTime = useCallback((t: number) => setPlayhead(t), []);
 
+  // tightening summary + the parts the preview should skip
+  const [plan, setPlan] = useState<TightenPlan | null>(null);
+  const tk = JSON.stringify(st.tighten || {});
+  useEffect(() => {
+    if (!st.tighten?.enabled) { setPlan(null); return; }
+    let stop = false;
+    const t = setTimeout(() => api<TightenPlan>(`/clips/${clip.id}/tighten-plan`, { body: { settings: st.tighten } }).then((p) => !stop && setPlan(p)).catch(() => {}), 350);
+    return () => { stop = true; clearTimeout(t); };
+  }, [clip.id, clip.start, clip.end, tk, words.length]); // eslint-disable-line
+
   return (
     <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
       <div className="xl:sticky xl:top-6 xl:self-start">
         {project.has_video && project.proxy_url ? (
-          <ClipPreview src={url(project.proxy_url)} srcW={project.meta.width} srcH={project.meta.height} start={clip.start} end={clip.end} settings={st} words={words} framing={framing} onTime={onTime} seekTo={seek} />
+          <ClipPreview src={url(project.proxy_url)} srcW={project.meta.width} srcH={project.meta.height} start={clip.start} end={clip.end} settings={st} words={words} framing={framing} onTime={onTime} seekTo={seek} skip={plan?.removed} />
         ) : urlOnly && pv?.ready && pv.url ? (
           <ClipPreview src={url(pv.url)} srcW={pv.width} srcH={pv.height} start={clip.start - pv.seg_start} end={clip.end - pv.seg_start} settings={st}
-            words={words.map((w) => ({ ...w, s: w.s - pv.seg_start, e: w.e - pv.seg_start }))} framing={framing} onTime={onTime} seekTo={seek} />
+            words={words.map((w) => ({ ...w, s: w.s - pv.seg_start, e: w.e - pv.seg_start }))} framing={framing} onTime={onTime} seekTo={seek} skip={plan?.removed} />
         ) : urlOnly ? (
           <Card className="space-y-3 p-4">
             {pvErr ? <Notice kind="error">{pvErr}<div className="mt-2"><Button size="sm" variant="secondary" onClick={loadPv}>Try again</Button></div></Notice>
@@ -87,7 +99,7 @@ export function ClipEditor({ project, clip, fonts, patch, refresh }: { project: 
           { id: "social", label: "Social text", icon: <Megaphone className="h-3.5 w-3.5" /> }, { id: "thumb", label: "Thumbnail", icon: <ImageIcon className="h-3.5 w-3.5" /> },
           { id: "export", label: "Export", icon: <Download className="h-3.5 w-3.5" /> }]} />
         <Card className="p-4">
-          {tab === "clip" && <ClipTab clip={clip} playhead={clip.start + playhead} patch={(p) => patch(clip.id, p)} seek={(t) => setSeek((s) => ({ t, n: s.n + 1 }))} />}
+          {tab === "clip" && <ClipTab clip={clip} playhead={clip.start + playhead} patch={(p) => patch(clip.id, p)} seek={(t) => setSeek((s) => ({ t, n: s.n + 1 }))} plan={plan} set={set} />}
           {tab === "captions" && (
             <div className="space-y-5">
               <div className="rounded-md border p-3"><Switch label="Show captions in the video" checked={st.caption.show !== false} onChange={(v) => set({ caption: { show: v } })} />
@@ -119,7 +131,7 @@ function TimeField({ label, value, onCommit }: { label: string; value: number; o
   return <div><Label>{label}</Label><Input className="w-28 tabular-nums" value={txt} onChange={(e) => setTxt(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} /></div>;
 }
 
-function ClipTab({ clip, playhead, patch, seek }: { clip: Clip; playhead: number; patch: (p: any) => void; seek: (t: number) => void }) {
+function ClipTab({ clip, playhead, patch, seek, plan, set }: { clip: Clip; playhead: number; patch: (p: any) => void; seek: (t: number) => void; plan: TightenPlan | null; set: (p: any) => void }) {
   const [err, setErr] = useState("");
   const safe = async (p: any) => { setErr(""); try { patch(p); } catch (e: any) { setErr(e.message); } };
   return (
@@ -150,6 +162,7 @@ function ClipTab({ clip, playhead, patch, seek }: { clip: Clip; playhead: number
         ))}
       </div>
       <p className="text-xs text-muted-foreground">The score is an estimate of how well the clip is built (hook, clarity, ending). It is not a prediction or guarantee of views.</p>
+      <TightenBox clip={clip} plan={plan} set={set} />
       <div><Label>Suggested hook</Label><Input value={clip.hook} onChange={(e) => patch({ hook: e.target.value })} /></div>
       <div><Label>Suggested caption</Label><Input value={clip.caption} onChange={(e) => patch({ caption: e.target.value })} /></div>
     </div>
@@ -274,6 +287,40 @@ function HiddenRanges({ clip, playhead, set }: { clip: Clip; playhead: number; s
               </li>
             ))}
           </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+
+function TightenBox({ clip, plan, set }: { clip: Clip; plan: TightenPlan | null; set: (p: any) => void }) {
+  const t = clip.settings.tighten || { enabled: false, silence: true, silence_max: 0.7, keep: 0.2, fillers: true, filler_words: "um, uh, er, hmm" };
+  const T = (p: Partial<typeof t>) => set({ tighten: p });
+  return (
+    <div className="space-y-3 rounded-lg border border-white/5 bg-white/[0.02] p-3">
+      <Switch label="Tighten: cut long pauses and filler words" checked={t.enabled} onChange={(v) => T({ enabled: v })} />
+      {t.enabled && (
+        <>
+          <div className="space-y-3">
+            <Switch label="Cut long pauses" checked={t.silence} onChange={(v) => T({ silence: v })} />
+            {t.silence && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Slider label="Cut pauses longer than" value={t.silence_max} min={0.3} max={2.5} step={0.1} suffix=" s" onChange={(v) => T({ silence_max: v })} />
+                <Slider label="Keep a breath of" value={t.keep} min={0.05} max={0.5} step={0.05} suffix=" s" onChange={(v) => T({ keep: v })} />
+              </div>
+            )}
+            <Switch label="Cut filler words" checked={t.fillers} onChange={(v) => T({ fillers: v })} />
+            {t.fillers && <div><Label>Filler words (comma separated)</Label><Input value={t.filler_words} onChange={(e) => T({ filler_words: e.target.value })} /></div>}
+          </div>
+          {plan && (
+            <div className={`rounded-md px-3 py-2 text-sm ${plan.removed.length ? "bg-primary/10 text-foreground" : "bg-muted text-muted-foreground"}`}>
+              {plan.removed.length
+                ? <>Cuts <b>{plan.removed_seconds.toFixed(1)} s</b> ({plan.pauses} pause{plan.pauses === 1 ? "" : "s"}, {plan.fillers} filler word{plan.fillers === 1 ? "" : "s"}). The export is <b>{plan.new_duration.toFixed(1)} s</b> instead of {plan.duration.toFixed(1)} s. The preview skips the cut parts.</>
+                : "Nothing to cut with these settings."}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">Cuts follow the transcript's word timing, so check the preview. Speech models often leave out "um" and "uh" entirely, so filler cutting only works for fillers that appear in the transcript; pause cutting always works. Captions and the SRT file follow the shorter timeline.</p>
         </>
       )}
     </div>

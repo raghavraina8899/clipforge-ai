@@ -84,6 +84,7 @@ export interface ClipSettings {
   enhance: { stabilize: boolean; brightness: number; contrast: number; saturation: number; sharpness: number; normalize_audio: boolean; denoise_audio: boolean; fade_in: number; fade_out: number; zoom: string };
   hook: { enabled: boolean; text: string; duration: number; style: string };
   ending: { enabled: boolean; text: string; duration: number };
+  tighten?: { enabled: boolean; silence: boolean; silence_max: number; keep: number; fillers: boolean; filler_words: string };
   caption: CaptionStyle;
   audio: { music?: { file: string; volume: number }; sfx?: { file: string; volume: number } };
 }

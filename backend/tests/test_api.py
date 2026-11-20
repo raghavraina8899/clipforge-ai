@@ -129,3 +129,19 @@ def test_full_import_with_real_transcription(client, test_video):
     assert j["status"] == "done", j.get("error")
     d = client.get(f"/api/projects/{r['project_id']}").json()
     assert d["project"]["status"] == "ready" and d["project"]["analysis"]["speech_engine"] == "cpu"
+
+
+def test_tighten_plan_endpoint(client):
+    """Words with a long pause in the middle: the plan says what would be cut, and the clip's own settings stay untouched until saved."""
+    add_project("p2")
+    add_clip("c2", "p2")
+    words = [{"w": f"a{i}", "s": 0.4 * i, "e": 0.4 * i + 0.4} for i in range(8)] + [{"w": f"b{i}", "s": 12 + 0.4 * i, "e": 12.4 + 0.4 * i} for i in range(8)]
+    db.update("clips", "c2", start=0.0, end=16.0)
+    import json
+    pipeline.paths("p2")["transcript"].write_text(json.dumps({"language": "en", "words": words, "segments": []}))
+    off = client.post("/api/clips/c2/tighten-plan", json={}).json()
+    assert off["removed"] == [] and off["new_duration"] == 16
+    on = client.post("/api/clips/c2/tighten-plan", json={"settings": {"enabled": True}}).json()
+    assert on["pauses"] >= 1 and on["removed_seconds"] > 5 and on["new_duration"] < 11
+    assert client.get("/api/clips/c2/srt").status_code == 200
+    client.delete("/api/projects/p2")
