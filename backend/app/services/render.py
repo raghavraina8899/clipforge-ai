@@ -114,11 +114,20 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
     notes += pl["notes"]
 
     track = None
-    if layout in ("smart", "split"):
+    allow_facecam = layout != "face"
+    if layout == "face":
+        layout = "smart"  # face-follow crop only, never the stacked facecam layout
+    if layout in ("smart", "split", "facecam"):
         if on_progress:
             on_progress(2, "Detecting faces and speakers")
         track = vision.track(proxy or src_path, start, end, sw, sh, cw, on_progress=lambda p: on_progress and on_progress(2 + p * 0.08, "Detecting faces and speakers"), ctx=ctx)
         notes.append(track["note"])
+        if layout in ("smart", "facecam") and allow_facecam and track.get("facecam"):
+            layout = "facecam"
+            notes.append("Facecam detected: face on top, main content below.")
+        elif layout == "facecam":
+            notes.append("No separate facecam found; used the face-follow crop instead.")
+            layout = "smart"
         if layout == "split" and len(track["tracks"]) < 2:
             notes.append("Split-screen needs two people on screen; used a single smart crop instead.")
             layout = "smart"
@@ -148,6 +157,35 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
         else:
             chain.append(f"scale={W}:{H}:flags=lanczos")
         graph.append("[0:v]" + ",".join(chain) + "[base]")
+    elif layout == "facecam":
+        fcs = st.get("facecam") or {}
+        share = min(0.6, max(0.25, float(fcs.get("share", 0.4))))
+        Ht = EVEN(H * share)
+        Hb = H - Ht
+        fc = track["facecam"]
+        asp = W / Ht
+        fcw = max(fc["w"], fc["h"] * asp)
+        fcw = min(fcw, sw, sh * asp)
+        fch = fcw / asp
+        fx = min(max(fc["x"] + fc["w"] / 2 - fcw / 2, 0), sw - fcw)
+        fy = min(max(fc["y"] + fc["h"] / 2 - fch / 2, 0), sh - fch)
+        if W / fcw > 1.5:
+            notes.append(f"The facecam is small in the source; it is enlarged {W / fcw:.1f}× and will look soft.")
+        pre = (",".join(chain) + ",") if chain else ""
+        fill_content = fcs.get("content") == "fill"
+        patch = ""
+        if fcs.get("hide", True):
+            patch = (f"split=2[g1][g2];[g2]crop={int(fc['w'])}:{int(fc['h'])}:{int(fc['x'])}:{int(fc['y'])},gblur=sigma=30[pt];"
+                     f"[g1][pt]overlay={int(fc['x'])}:{int(fc['y'])},")
+        graph.append(f"[0:v]{pre}split={2 if fill_content else 3}[fa]{'' if fill_content else '[ga]'}[gb]")
+        graph.append(f"[fa]crop={int(fcw)}:{int(fch)}:{fx:.0f}:{fy:.0f},scale={W}:{Ht}:flags=lanczos[top]")
+        if fill_content:
+            graph.append(f"[gb]{patch}scale={W}:{Hb}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{Hb}[bot]")
+        else:
+            graph.append(f"[ga]scale={W}:{Hb}:force_original_aspect_ratio=increase,crop={W}:{Hb},gblur=sigma=40,eq=brightness=-0.08[gbg]")
+            graph.append(f"[gb]{patch}scale={W}:{Hb}:force_original_aspect_ratio=decrease:flags=lanczos[gfg]")
+            graph.append("[gbg][gfg]overlay=(W-w)/2:(H-h)/2[bot]")
+        graph.append("[top][bot]vstack=inputs=2[base]")
     elif layout == "split":
         ratio = W / (H / 2)
         t0, t1 = track["tracks"][0], track["tracks"][-1]

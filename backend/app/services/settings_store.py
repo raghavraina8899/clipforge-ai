@@ -22,6 +22,7 @@ DEFAULTS = {
     "video": {
         "format": "9:16",
         "layout": "smart",
+        "facecam": {"share": 0.4, "content": "fit", "hide": True},
         "export": {"resolution": 1080, "fps": 30, "codec": "h264", "quality": "high"},
         "enhance": {
             "stabilize": False, "brightness": 0.0, "contrast": 1.0, "saturation": 1.0, "sharpness": 0.0,

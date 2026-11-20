@@ -27,6 +27,11 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 - Live preview in URL-only mode: opening a clip downloads a small 480p copy of just that segment (cached under `preview/`), re-transcribes it for exact caption timing, and shows it in the editor; it is deleted when the clip is exported. Tested with a fake download only.
 - Known limits: no thumbnail frames for URL-only projects.
 
+## Added 2026-11-20: facecam + content layout
+- "Smart (auto)": if a small face overlay near an edge/corner is detected (streamer facecam), export stacks face on top and full gameplay/screen below (share slider, fit-with-blur or fill, optional blur of the facecam inside the lower content). Vlogs (large central face) keep the face-follow crop. Explicit options: "Facecam + content", "Face-follow crop".
+- Tested on a synthetic gameplay+facecam video (export + browser preview). Not yet tried on the real GTA project.
+- Backend now runs on Python 3.12 (needed for current yt-dlp); `av<17` pinned for faster-whisper.
+
 ## Not yet verified / known gaps
 - Real YouTube segment/audio download end to end
 - Gemini with a real key and Ollama with a real model (only simulated)

@@ -18,7 +18,7 @@ export default function VideoSettings() {
       <div className="space-y-6">
         <Card><CardHeader><CardTitle>Format and framing</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-3">
           <div><Label>Aspect ratio</Label><Select value={v.format} onChange={(e) => upd({ format: e.target.value })}><option value="9:16">9:16 – Reels / Shorts</option><option value="1:1">1:1 – Square</option><option value="16:9">16:9 – Landscape</option><option value="4:5">4:5 – Instagram feed</option></Select></div>
-          <div><Label>Framing</Label><Select value={v.layout} onChange={(e) => upd({ layout: e.target.value })}><option value="smart">Smart crop (faces)</option><option value="center">Center crop</option><option value="blur">Blurred background</option><option value="fill">Colour fill</option><option value="split">Split screen</option></Select></div>
+          <div><Label>Framing</Label><Select value={v.layout} onChange={(e) => upd({ layout: e.target.value })}><option value="smart">Smart (auto: facecam + content, or face crop)</option><option value="facecam">Facecam + content (always)</option><option value="face">Face-follow crop only</option><option value="center">Center crop</option><option value="blur">Blurred background</option><option value="fill">Colour fill</option><option value="split">Split screen</option></Select></div>
           <div><Label>Zoom</Label><Select value={en.zoom} onChange={(e) => upd({ enhance: { zoom: e.target.value } })}><option value="none">None</option><option value="punch">Punch-in</option><option value="push">Slow push-in</option></Select></div>
         </CardContent></Card>
         <Card><CardHeader><CardTitle>Export</CardTitle></CardHeader><CardContent className="space-y-3">

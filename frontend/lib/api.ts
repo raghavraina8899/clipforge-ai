@@ -79,7 +79,7 @@ export interface Clip {
 export interface ExportEntry { file: string; srt: string; url: string; srt_url: string; at: number; width: number; height: number; fps: number; resolution: number; codec: string; quality: string; duration: number; size: number; notes: string[]; layout_used: string; upscale: number }
 export interface CaptionStyle { preset: string; font?: string; size?: number; bold?: boolean; color?: string; highlight?: string; keyword?: string; bg?: string; bgOpacity?: number; outline?: number; outlineColor?: string; shadow?: number; blur?: number; position?: number; lineSpacing?: number; maxWordsPerLine?: number; wordsAtTime?: number; animation?: string; uppercase?: boolean; autoKeywords?: boolean; keywords?: string; emoji?: boolean; spacing?: number }
 export interface ClipSettings {
-  format: string; layout: string; fill_color?: string;
+  format: string; layout: string; fill_color?: string; facecam?: { share: number; content: string; hide: boolean };
   export: { resolution: number; fps: number; codec: string; quality: string };
   enhance: { stabilize: boolean; brightness: number; contrast: number; saturation: number; sharpness: number; normalize_audio: boolean; denoise_audio: boolean; fade_in: number; fade_out: number; zoom: string };
   hook: { enabled: boolean; text: string; duration: number; style: string };

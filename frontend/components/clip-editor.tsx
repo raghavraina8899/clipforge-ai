@@ -51,7 +51,7 @@ export function ClipEditor({ project, clip, fonts, patch, refresh }: { project: 
   const hasPreview = project.has_video || !!pv?.ready;
   useEffect(() => {
     setFraming(null);
-    if (!hasPreview || !["smart", "split"].includes(st.layout)) return;
+    if (!hasPreview || !["smart", "split", "face", "facecam"].includes(st.layout)) return;
     let stop = false; setFramingBusy(true);
     api<Framing>(`/clips/${clip.id}/framing`).then((f) => !stop && setFraming(f)).catch(() => {}).finally(() => !stop && setFramingBusy(false));
     return () => { stop = true; };
@@ -170,8 +170,18 @@ function LookTab({ st, set }: { st: ClipSettings; set: (p: any) => void }) {
         <div className="flex flex-wrap gap-2">{[["9:16", "Reels / Shorts"], ["1:1", "Square"], ["16:9", "Landscape"], ["4:5", "Feed"]].map(([f, l]) => (
           <button key={f} onClick={() => set({ format: f })} className={`rounded-md border px-3 py-2 text-left text-sm ${st.format === f ? "border-primary bg-primary/10 text-primary" : "border-input"}`}><div className="font-medium">{f}</div><div className="text-[11px] text-muted-foreground">{l}</div></button>))}</div></div>
       <div><h4 className="mb-2 text-sm font-semibold">Framing</h4>
-        <div className="grid gap-2 sm:grid-cols-2">{[["smart", "Smart crop", "Follows the active speaker's face; falls back to center."], ["center", "Center crop", "Fixed center framing."], ["blur", "Blurred background", "Whole frame over a blurred copy. No cropping."], ["fill", "Colour fill", "Whole frame on a solid background."], ["split", "Split screen", "Two people stacked (needs two faces)."]].map(([id, l, d]) => (
+        <div className="grid gap-2 sm:grid-cols-2">{[["smart", "Smart (auto)", "Streamer facecam detected → face on top, gameplay/screen below. Otherwise follows the speaker's face (vlogs)."], ["facecam", "Facecam + content", "Always stack: face on top, full gameplay/screen below."], ["face", "Face-follow crop", "Only the speaker, full-screen vertical crop."], ["center", "Center crop", "Fixed center framing."], ["blur", "Blurred background", "Whole frame over a blurred copy. No cropping."], ["fill", "Colour fill", "Whole frame on a solid background."], ["split", "Split screen", "Two people stacked (needs two faces)."]].map(([id, l, d]) => (
           <button key={id} onClick={() => set({ layout: id })} className={`rounded-md border p-2.5 text-left ${st.layout === id ? "border-primary bg-primary/10" : "border-input"}`}><div className="text-sm font-medium">{l}</div><div className="text-xs text-muted-foreground">{d}</div></button>))}</div>
+        {["smart", "facecam"].includes(st.layout) && (
+          <div className="mt-3 space-y-3 rounded-md border p-3">
+            <h5 className="text-xs font-semibold">Facecam + content layout</h5>
+            <Slider label="Face area (share of screen)" value={st.facecam?.share ?? 0.4} min={0.25} max={0.6} step={0.01} onChange={(v) => set({ facecam: { share: v } })} />
+            <div className="grid grid-cols-2 gap-2">{[["fit", "Show full content (blurred sides)"], ["fill", "Fill area (crop sides)"]].map(([id, l]) => (
+              <button key={id} onClick={() => set({ facecam: { content: id } })} className={`rounded-md border px-2 py-1.5 text-xs ${(st.facecam?.content ?? "fit") === id ? "border-primary bg-primary/10 text-primary" : "border-input"}`}>{l}</button>))}</div>
+            <Switch label="Blur the facecam inside the lower content" checked={st.facecam?.hide ?? true} onChange={(v) => set({ facecam: { hide: v } })} />
+            <p className="text-xs text-muted-foreground">Used only when a small face overlay is detected in the video; otherwise the normal face-follow crop is used and the export report says so.</p>
+          </div>
+        )}
         {st.layout === "fill" && <div className="mt-2 flex items-center gap-2"><Label className="mb-0">Fill colour</Label><input type="color" value={st.fill_color || "#101010"} onChange={(e) => set({ fill_color: e.target.value })} /></div>}
         <div className="mt-3 grid grid-cols-3 gap-2">{[["none", "No zoom"], ["punch", "Punch-in (static 1.15×)"], ["push", "Slow push-in"]].map(([id, l]) => (
           <button key={id} onClick={() => E({ zoom: id })} className={`rounded-md border px-2 py-1.5 text-xs ${en.zoom === id ? "border-primary bg-primary/10 text-primary" : "border-input"}`}>{l}</button>))}</div>

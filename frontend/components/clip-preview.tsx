@@ -5,7 +5,7 @@ import { captionAt } from "@/lib/captions";
 import type { ClipSettings, Word } from "@/lib/api";
 import { fmtTime } from "@/lib/utils";
 
-export interface Framing { mode: string; points: number[][]; tracks: { cx: number; cy: number }[]; src_w: number; src_h: number; note: string }
+export interface Framing { mode: string; points: number[][]; tracks: { cx: number; cy: number }[]; facecam?: { x: number; y: number; w: number; h: number } | null; src_w: number; src_h: number; note: string }
 const ASPECT: Record<string, [number, number]> = { "9:16": [9, 16], "1:1": [1, 1], "16:9": [16, 9], "4:5": [4, 5] };
 
 function lerp(points: number[][], t: number, idx: number): number {
@@ -53,9 +53,36 @@ export function ClipPreview({ src, srcW, srcH, start, end, settings, words, fram
       return [x * sx, y * sx, cw * sx, ch * sx];
     };
     const layout = st.layout;
-    if (layout === "smart" || layout === "center") {
+    const fc = fr?.facecam;
+    if (fc && (layout === "smart" || layout === "facecam")) {
+      // stacked: facecam on top, main content (gameplay / screen) below
+      const opt = st.facecam || { share: 0.4, content: "fit", hide: true };
+      const Ht = Math.round(H * Math.min(0.6, Math.max(0.25, opt.share))), Hb = H - Ht;
+      const asp = W / Ht;
+      const fcw = Math.min(Math.max(fc.w, fc.h * asp), srcW, srcH * asp), fch = fcw / asp;
+      const fx = Math.min(Math.max(fc.x + fc.w / 2 - fcw / 2, 0), srcW - fcw), fy = Math.min(Math.max(fc.y + fc.h / 2 - fch / 2, 0), srcH - fch);
+      ctx.drawImage(v, fx * sx, fy * sx, fcw * sx, fch * sx, 0, 0, W, Ht);
+      ctx.save(); ctx.beginPath(); ctx.rect(0, Ht, W, Hb); ctx.clip();
+      const base = ctx.filter;
+      let f: number;
+      if (opt.content === "fill") f = Math.max(W / vw, Hb / vh);
+      else {
+        const cover = Math.max(W / vw, Hb / vh);
+        ctx.filter = `blur(${W / 18}px) brightness(.9)`;
+        ctx.drawImage(v, (W - vw * cover) / 2, Ht + (Hb - vh * cover) / 2, vw * cover, vh * cover);
+        ctx.filter = base;
+        f = Math.min(W / vw, Hb / vh);
+      }
+      const ox = (W - vw * f) / 2, oy = Ht + (Hb - vh * f) / 2;
+      ctx.drawImage(v, ox, oy, vw * f, vh * f);
+      if (opt.hide) {
+        ctx.save(); ctx.beginPath(); ctx.rect(ox + fc.x * sx * f, oy + fc.y * sx * f, fc.w * sx * f, fc.h * sx * f); ctx.clip();
+        ctx.filter = `blur(${W / 40}px)`; ctx.drawImage(v, ox, oy, vw * f, vh * f); ctx.restore();
+      }
+      ctx.restore();
+    } else if (layout === "smart" || layout === "center" || layout === "face" || layout === "facecam") {
       let cx = srcW / 2, cy = srcH / 2;
-      if (layout === "smart" && fr?.mode === "face" && fr.points.length) { cx = lerp(fr.points, rel, 1); cy = lerp(fr.points, rel, 2); }
+      if ((layout === "smart" || layout === "face" || layout === "facecam") && fr?.mode === "face" && fr.points.length) { cx = lerp(fr.points, rel, 1); cy = lerp(fr.points, rel, 2); }
       const zoomExtra = en.zoom === "push" ? 1 + 0.12 * (rel / dur) : 1;
       const [x, y, cw, ch] = crop(cx, cy, W / H, zoomExtra);
       ctx.drawImage(v, x, y, cw, ch, 0, 0, W, H);

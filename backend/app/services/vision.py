@@ -19,15 +19,15 @@ def track(video: Path, start: float, end: float, src_w: int, src_h: int, crop_w:
         import cv2
         import numpy as np
     except ImportError:
-        return {"mode": "center", "points": [], "tracks": [], "note": "OpenCV not installed; used center crop."}
+        return {"mode": "center", "points": [], "tracks": [], "facecam": None, "note": "OpenCV not installed; used center crop."}
     if not hasattr(cv2, "CascadeClassifier"):
-        return {"mode": "center", "points": [], "tracks": [], "note": "This OpenCV build has no face detector (need OpenCV 4.x); used center crop."}
+        return {"mode": "center", "points": [], "tracks": [], "facecam": None, "note": "This OpenCV build has no face detector (need OpenCV 4.x); used center crop."}
     cc = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
     if cc.empty():
-        return {"mode": "center", "points": [], "tracks": [], "note": "Face detector model not found; used center crop."}
+        return {"mode": "center", "points": [], "tracks": [], "facecam": None, "note": "Face detector model not found; used center crop."}
     cap = cv2.VideoCapture(str(video))
     if not cap.isOpened():
-        return {"mode": "center", "points": [], "tracks": [], "note": "Could not open video for face tracking; used center crop."}
+        return {"mode": "center", "points": [], "tracks": [], "facecam": None, "note": "Could not open video for face tracking; used center crop."}
     pw = cap.get(cv2.CAP_PROP_FRAME_WIDTH) or src_w
     ph = cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or src_h
     sx, sy = src_w / pw, src_h / ph
@@ -54,7 +54,7 @@ def track(video: Path, start: float, end: float, src_w: int, src_h: int, crop_w:
                 if t - lt <= 1.5 and abs(lx - cx) < bd:
                     best, bd = ti, abs(lx - cx)
             if best is None:
-                tracks.append({"pts": [], "prev": None, "ema": 0.0})
+                tracks.append({"pts": [], "prev": None, "ema": 0.0, "sizes": []})
                 best = len(tracks) - 1
             tr = tracks[best]
             # mouth-region motion between consecutive samples = speaking proxy
@@ -64,13 +64,14 @@ def track(video: Path, start: float, end: float, src_w: int, src_h: int, crop_w:
                 tr["ema"] = 0.6 * tr["ema"] + 0.4 * float(np.abs(patch - tr["prev"]).mean())
             tr["prev"] = patch
             tr["pts"].append((t, cx, cy))
+            tr["sizes"].append((w / scale, h / scale))
             seen.append(best)
         samples.append({"t": t, "seen": seen})
         if on_progress and i % 8 == 0:
             on_progress(i / n * 100)
     cap.release()
     if not any(s["seen"] for s in samples):
-        return {"mode": "center", "points": [], "tracks": [], "note": "No faces detected; used center crop."}
+        return {"mode": "center", "points": [], "tracks": [], "facecam": None, "note": "No faces detected; used center crop."}
 
     # choose active speaker with hysteresis, hold last position through gaps
     # ignore short-lived tracks: Haar false positives flicker, real people persist
@@ -122,4 +123,31 @@ def track(video: Path, start: float, end: float, src_w: int, src_h: int, crop_w:
         if ti in eligible:
             persistent.append({"cx": round(_median([p[1] for p in tr["pts"]]) * sx, 1), "cy": round(_median([p[2] for p in tr["pts"]]) * sy, 1)})
     persistent.sort(key=lambda p: p["cx"])
-    return {"mode": "face", "points": simp, "tracks": persistent, "note": f"Tracked {len(eligible)} face(s)" + (f"; active-speaker switching across {len(persistent)} people." if len(persistent) > 1 else ".")}
+    facecam = _facecam(tracks, eligible, sx, sy, src_w, src_h)
+    return {"mode": "face", "points": simp, "tracks": persistent, "facecam": facecam, "note": f"Tracked {len(eligible)} face(s)" + (f"; active-speaker switching across {len(persistent)} people." if len(persistent) > 1 else ".")}
+
+
+def _facecam(tracks: list, eligible: set, sx: float, sy: float, src_w: int, src_h: int) -> Optional[dict]:
+    """A streamer-style facecam = a small face sitting near an edge/corner of a larger scene.
+    Returns the overlay rectangle in source pixels, or None (e.g. vlogs where the face fills the frame)."""
+    best = None
+    for ti in eligible:
+        tr = tracks[ti]
+        if len(tr["pts"]) < 3:
+            continue
+        cx = _median([p[1] for p in tr["pts"]]) * sx
+        cy = _median([p[2] for p in tr["pts"]]) * sy
+        fw = _median([z[0] for z in tr["sizes"]]) * sx
+        fh = _median([z[1] for z in tr["sizes"]]) * sy
+        if best is None or len(tr["pts"]) > best[0]:
+            best = (len(tr["pts"]), cx, cy, fw, fh)
+    if not best:
+        return None
+    _, cx, cy, fw, fh = best
+    small = fw / src_w < 0.22
+    at_edge = cx / src_w < 0.3 or cx / src_w > 0.7 or cy / src_h < 0.3 or cy / src_h > 0.7
+    if not (small and at_edge):
+        return None
+    w, h = min(fw * 2.4, src_w * 0.6), min(fh * 2.4, src_h * 0.6)
+    x, y = min(max(cx - w / 2, 0), src_w - w), min(max(cy - h / 2, 0), src_h - h)
+    return {"x": round(float(x), 1), "y": round(float(y), 1), "w": round(float(w), 1), "h": round(float(h), 1)}
