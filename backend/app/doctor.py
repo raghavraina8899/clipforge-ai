@@ -122,6 +122,15 @@ def c_model():
               "Downloads automatically the first time you process a video (needs internet, ~480 MB for 'small').", "warn")
 
 
+def c_engine():
+    from .services import engine
+    info = engine.info()
+    best = engine.LABELS[info["best"]]
+    if info["apple_silicon"] and not info["mlx_installed"]:
+        return _r(False, f"{best}; the faster Apple GPU engine is not installed", "Run: backend/.venv/bin/pip install mlx-whisper  (2-3x faster transcription on this Mac)", "warn")
+    return _r(True, f"{best} (automatic choice for this computer)")
+
+
 def _net(url: str):
     import httpx
     try:
@@ -135,7 +144,7 @@ def _net(url: str):
 REGISTRY = [
     ("python", "Python 3.10 or newer", c_python, False), ("ffmpeg", "FFmpeg installed", c_ffmpeg, False),
     ("libass", "FFmpeg can burn in captions (libass)", c_libass, False), ("x264", "FFmpeg can write H.264 video", c_x264, False),
-    ("whisper", "Speech recognition (faster-whisper)", c_whisper, False), ("av", "Audio library compatible with faster-whisper", c_av, False),
+    ("whisper", "Speech recognition (faster-whisper)", c_whisper, False), ("engine", "Fastest speech engine for this computer", c_engine, False), ("av", "Audio library compatible with faster-whisper", c_av, False),
     ("opencv", "Face detection (OpenCV 4.x)", c_opencv, False), ("ytdlp", "YouTube downloader (yt-dlp, only for links)", c_ytdlp, False),
     ("ejs", "YouTube challenge solver + JavaScript runtime", c_ejs, False), ("datadir", "Data folder is writable", c_datadir, False),
     ("disk", "Free disk space", c_disk, False), ("sync", "Data is not inside a cloud-synced folder", c_sync, False),

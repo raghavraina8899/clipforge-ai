@@ -61,8 +61,8 @@ def items() -> list:
         out.append({"id": f"global:asset:{a.name}", "group": "App data", "project_id": None, "kind": "asset", "label": f"Audio file {a.name}", "detail": "music / sound effect you uploaded",
                     "bytes": _size(a), "note": "Clips that use it will render without it.", "danger": False, "busy": False})
     cache = Path.home() / ".cache" / "huggingface" / "hub"
-    for m in sorted(cache.glob("models--Systran--faster-whisper-*")) if cache.exists() else []:
-        out.append({"id": f"global:model:{m.name}", "group": "Speech models", "project_id": None, "kind": "model", "label": f"Speech model {m.name.split('faster-whisper-')[-1]}", "detail": "downloaded once from Hugging Face",
+    for m in (sorted(list(cache.glob("models--Systran--faster-whisper-*")) + list(cache.glob("models--mlx-community--whisper-*"))) if cache.exists() else []):
+        out.append({"id": f"global:model:{m.name}", "group": "Speech models", "project_id": None, "kind": "model", "label": f"Speech model {m.name.split('--')[-1]}" + (" (Apple GPU)" if "mlx-community" in m.name else ""), "detail": "downloaded once from Hugging Face",
                     "bytes": _size(m), "note": "Needed for transcription. It downloads again the next time you process a video.", "danger": False, "busy": False})
     for z in sorted(Path(tempfile.gettempdir()).glob("tmp*.zip")):
         out.append({"id": f"global:zip:{z.name}", "group": "Leftovers", "project_id": None, "kind": "zip", "label": f"Unfinished bundle {z.name}", "detail": str(z.parent),

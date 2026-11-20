@@ -80,6 +80,7 @@ Set `CLIPFORGE_DEV=1 ./start.sh` for development mode (hot reload).
 * **Resolution honesty**: a 16:9 → 9:16 crop uses only ~1/3 of the source width. If an export needs upscaling, the result states the factor. 1440p/4K are reduced unless the source really has the pixels; 60 fps is not invented from 30 fps.
 * **Emoji** in captions are composited as image overlays (libass cannot render colour emoji); this needs macOS' Apple Color Emoji font and is skipped with a notice elsewhere.
 * **Hindi / Hinglish**: the *Spoken language* option tells Whisper what to listen for. *Hindi* gives Devanagari captions; *Hinglish* gives Hindi in English letters (a Hinglish prompt plus a built-in romanizer, so output is natural but can differ from how you'd spell it; fix words in the Captions tab). Projects already transcribed in Devanagari have a one-click convert button.
+* **Speech speed**: HookHunt picks the fastest speech engine for the computer automatically: **Apple GPU** (MLX Whisper) on Apple-chip Macs, **NVIDIA GPU** (CUDA) where one is present, otherwise the **CPU** with batching. Voice-activity detection skips silence and music. On an M4 Mac: about 27x real time on the GPU (a 20-hour video in roughly 45 minutes) versus about 12x on the CPU. You can override the engine and model, and run a speed test, in AI Settings. If the chosen engine fails, the next one is used and the project says so.
 * **Music / SFX** are never added automatically; only files you upload.
 * Only process content you own or are permitted to use.
 

@@ -150,6 +150,7 @@ export default function ProjectPage() {
             {p.meta?.width ? <span>{p.meta.width}×{p.meta.height} · {Math.round(p.meta.fps)} fps</span> : null}
             {p.language && <span>Language: {p.prefs?.language === "hinglish" ? "HINGLISH" : p.language.toUpperCase()}</span>}
             {p.analysis?.engine && <Badge>{p.analysis.engine === "builtin" ? "Built-in analyzer" : `AI: ${p.analysis.engine}`}</Badge>}
+            {p.analysis?.speech_engine && <Badge variant="primary">Speech: {({ mlx: "Apple GPU", cuda: "NVIDIA GPU", cpu: "CPU" } as Record<string, string>)[p.analysis.speech_engine] || p.analysis.speech_engine}</Badge>}
           </div>
         </div>
         {p.status !== "processing" && p.analysis && (
@@ -178,6 +179,7 @@ export default function ProjectPage() {
             <Button size="sm" onClick={async () => { try { await api(`/projects/${id}/romanize`, { method: "POST", body: {} }); refresh(); } catch (e: any) { setErr(e.message); } }}>Convert captions to Hinglish</Button></div>
         </Notice></div>
       )}
+      {p.analysis?.speech_note && !busy && <div className="mb-5"><Notice kind="warn">{p.analysis.speech_note}</Notice></div>}
       {p.analysis?.note && !busy && <div className="mb-5"><Notice kind="warn">{p.analysis.note}</Notice></div>}
       {p.analysis?.summary && !busy && <p className="mb-5 text-sm text-muted-foreground"><span className="font-medium text-foreground">Summary: </span>{p.analysis.summary}</p>}
 

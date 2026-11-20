@@ -18,7 +18,7 @@ DEFAULTS = {
         "gemini": {"api_key": "", "model": ""},
         "local": {"host": "http://localhost:11434", "model": ""},
     },
-    "transcription": {"model": "small", "language": "auto"},
+    "transcription": {"model": "small", "language": "auto", "engine": "auto"},
     "video": {
         "format": "9:16",
         "layout": "smart",

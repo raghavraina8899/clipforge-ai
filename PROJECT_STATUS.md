@@ -49,6 +49,11 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 - Cancel buttons: processing/analysis, export, clip preview, bundle (render all & download), file uploads. Cancelled imports and failed/cancelled projects have **Try again** (YouTube, uploads, live recordings). A cancelled export deletes its partial file.
 - Tested: queue/cancel scheduler, import cancel + retry, mid-export cancel. Not tested with a real YouTube preview download.
 
+## Speed work (2026-11-20)
+- Transcription engine auto-detected: Apple silicon -> MLX Whisper (GPU), NVIDIA -> faster-whisper CUDA, else faster-whisper CPU batched; falls back down that list. VAD-gated windows (10 min) so silence/music is skipped and progress/cancel work on any length. AI Settings: engine + model (adds `turbo`) + speed test; System check lists the engine.
+- Measured on M4 (10 min speech, small model): old CPU 10.0x, CPU batched 15x, Apple GPU 24-27x; turbo on GPU 10.2x. Accuracy matched (English and Hinglish checked). NVIDIA path written but NOT tested here (no NVIDIA machine).
+- Cost: +1.1 GB Python packages on Apple silicon (PyTorch comes with mlx-whisper); extra models download on first use.
+
 ## Not yet verified / known gaps
 - Real YouTube segment/audio download end to end
 - Gemini with a real key and Ollama with a real model (only simulated)

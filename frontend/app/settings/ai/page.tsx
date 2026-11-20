@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Notice, PageHeader, Select } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { PageLoader } from "@/components/loader";
+import { SpeechCard } from "@/components/speech-card";
 
 interface Model { id: string; name: string; description: string }
 
@@ -66,14 +67,7 @@ export default function AISettings() {
         <p className="text-xs text-muted-foreground">Small local models can give rougher JSON; HookHunt validates every answer and falls back if it is unusable.</p>
       </CardContent></Card>
 
-      <Card><CardHeader><CardTitle>Speech recognition (faster-whisper, local)</CardTitle></CardHeader><CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div><Label>Model size</Label><Select value={s.transcription.model} onChange={(e) => put({ transcription: { model: e.target.value } })}>
-            <option value="tiny">tiny – fastest, rough (≈75 MB)</option><option value="base">base – fast (≈145 MB)</option><option value="small">small – recommended (≈480 MB)</option><option value="medium">medium – accurate, slow (≈1.5 GB)</option><option value="large-v3">large-v3 – best, very slow (≈3 GB)</option></Select></div>
-          <div className="text-sm"><Label>Status</Label>{sys ? <div className="space-y-0.5 text-xs"><div>faster-whisper: {sys.whisper ? "installed" : "missing"}</div><div>FFmpeg: {sys.ffmpeg ? "found" : "missing"}</div><div>Face detection (OpenCV): {sys.opencv ? "available" : "missing"}</div></div> : null}</div>
-        </div>
-        <p className="text-xs text-muted-foreground">The model is downloaded once from Hugging Face on first use, then everything runs offline. For Hindi, “small” or larger is strongly recommended.</p>
-      </CardContent></Card>
+      <SpeechCard s={s} put={put} sys={sys} />
       </div>
       </div>
     </div>

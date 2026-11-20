@@ -102,6 +102,47 @@ def storage_delete(body: dict):
     return storage.delete(ids)
 
 
+@router.get("/speech-engine")
+def speech_engine():
+    from ..services import engine
+    pref = settings_store.load()["transcription"].get("engine", "auto")
+    return {**engine.info(), "setting": pref, "chosen": engine.choose(pref), "model": settings_store.load()["transcription"]["model"]}
+
+
+@router.post("/speed-test")
+def speed_test():
+    """Times every available engine on a short bundled speech sample (model loading is excluded from the timing)."""
+    from ..services import engine, transcribe
+    sample = Path(__file__).resolve().parents[1] / "assets" / "speed_sample.wav"
+    size = settings_store.load()["transcription"]["model"]
+
+    def fn(ctx):
+        import wave
+        results, engs = [], engine.available()
+        tmp = Path(tempfile.mkdtemp())
+        long_sample = tmp / "sample_long.wav"  # the 30 s sample repeated 5x = 150 s: long enough for batching to show its real speed
+        with wave.open(str(sample)) as src, wave.open(str(long_sample), "wb") as dst:
+            dst.setparams(src.getparams())
+            frames = src.readframes(src.getnframes())
+            for _ in range(5):
+                dst.writeframes(frames)
+        audio_s = 150.0
+        for i, eng in enumerate(engs):
+            base = i / len(engs) * 100
+            ctx.update(f"Testing {engine.LABELS[eng]}", base + 2, "Loading the model (first use downloads it once)")
+            out = tmp / "t.json"
+            transcribe.transcribe(sample, out, size, "en", 30.0, engine_pref=eng)  # warm-up: loads the model, not timed
+            ctx.update(f"Testing {engine.LABELS[eng]}", base + 50 / len(engs), "Timing 150 s of speech")
+            t = time.time()
+            transcribe.transcribe(long_sample, out, size, "en", audio_s, engine_pref=eng)
+            dt = max(0.05, time.time() - t)
+            x = audio_s / dt
+            results.append({"engine": eng, "label": engine.LABELS[eng], "seconds": round(dt, 2), "x_realtime": round(x, 1), "minutes_for_20h": round(20 * 60 / x, 1)})
+        shutil.rmtree(tmp, ignore_errors=True)
+        return {"results": results, "model": size}
+    return {"job_id": jobs.submit("speedtest", fn)}
+
+
 @router.get("/doctor")
 def doctor_checks(network: int = 1):
     from .. import doctor

@@ -94,7 +94,7 @@ def run_analysis(pid: str, ctx: JobCtx, p0: float = 0, p1: float = 100) -> None:
     n = make_clips(pid, res)
     db.update("projects", pid, analysis={"summary": res["summary"], "engine": res["engine"], "note": res["note"], "clips": n, "mode": prefs.get("mode", "moments"),
                                           "language": tr.get("language"), "word_timing": tr.get("word_timing", "precise"),
-                                          "devanagari": any(has_dev(w["w"]) for w in tr["words"])},
+                                          "devanagari": any(has_dev(w["w"]) for w in tr["words"]), "speech_engine": tr.get("engine"), "speech_note": tr.get("engine_note", "")},
               language=tr.get("language"))
 
 
