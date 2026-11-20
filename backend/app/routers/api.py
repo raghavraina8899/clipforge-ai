@@ -108,6 +108,21 @@ def doctor_checks(network: int = 1):
     return {"checks": doctor.run_checks(bool(network))}
 
 
+@router.get("/doctor/steps")
+def doctor_steps():
+    from .. import doctor
+    return {"steps": doctor.steps(True)}
+
+
+@router.get("/doctor/run/{check_id}")
+def doctor_run(check_id: str):
+    from .. import doctor
+    try:
+        return doctor.run_check(check_id)
+    except KeyError:
+        err(404, "Unknown check.")
+
+
 @router.get("/doctor/report")
 def doctor_report():
     from fastapi.responses import PlainTextResponse

@@ -26,77 +26,141 @@ def _cmd(cmd: list, timeout: int = 10) -> str:
         return ""
 
 
-def run_checks(network: bool = True) -> list:
-    out: list = []
+def _r(ok, detail, fix="", level="error"):
+    return {"ok": bool(ok), "detail": detail, "fix": "" if ok else fix, "level": "ok" if ok else level}
 
-    def add(id_, name, ok, detail, fix="", level=None):
-        out.append({"id": id_, "name": name, "ok": bool(ok), "level": "ok" if ok else (level or "error"), "detail": detail, "fix": "" if ok else fix})
 
+def c_python():
     py = sys.version_info
-    add("python", "Python 3.10 or newer", py >= (3, 10), f"Python {py.major}.{py.minor}.{py.micro}",
-        "Install Python 3.12 (Mac: brew install python@3.12), delete backend/.venv, then run ./start.sh again.", None if py >= (3, 10) else "warn")
+    return _r(py >= (3, 10), f"Python {py.major}.{py.minor}.{py.micro}", "Install Python 3.12 (Mac: brew install python@3.12), delete backend/.venv, then run ./start.sh again.", "warn")
 
+
+def c_ffmpeg():
     ff, fp = config.FFMPEG, config.FFPROBE
-    add("ffmpeg", "FFmpeg installed", ff and fp, (_cmd([ff, "-version"]).splitlines() or ["not found"])[0] if ff else "not found",
-        "Mac: ./setup-mac.sh (or brew install ffmpeg-full). Linux: sudo apt install ffmpeg.")
-    if ff:
-        filters = _cmd([ff, "-hide_banner", "-filters"])
-        enc = _cmd([ff, "-hide_banner", "-encoders"])
-        add("libass", "FFmpeg can burn in captions (libass)", re.search(r"\bsubtitles\b", filters) is not None, "subtitles filter " + ("found" if re.search(r"\bsubtitles\b", filters) else "missing"),
-            "Your FFmpeg has no caption support. Mac: brew uninstall ffmpeg && brew install ffmpeg-full.")
-        add("x264", "FFmpeg can write H.264 video", "libx264" in enc, "libx264 " + ("found" if "libx264" in enc else "missing"), "Install a full FFmpeg build (Mac: brew install ffmpeg-full).")
+    return _r(ff and fp, (_cmd([ff, "-version"]).splitlines() or ["not found"])[0] if ff else "not found", "Mac: ./setup-mac.sh (or brew install ffmpeg-full). Linux: sudo apt install ffmpeg.")
 
-    wv, av = _v("faster-whisper"), _v("av")
-    add("whisper", "Speech recognition (faster-whisper)", bool(wv), f"faster-whisper {wv or 'missing'}", "Run ./start.sh again to install the Python packages.")
-    if av:
-        major = int(av.split(".")[0])
-        add("av", "Audio library compatible with faster-whisper", major < 17, f"av {av}", "Run: backend/.venv/bin/pip install 'av>=14,<17'")
+
+def c_libass():
+    if not config.FFMPEG:
+        return _r(False, "FFmpeg missing", "Install FFmpeg first.")
+    ok = re.search(r"\bsubtitles\b", _cmd([config.FFMPEG, "-hide_banner", "-filters"])) is not None
+    return _r(ok, "subtitles filter " + ("found" if ok else "missing"), "Your FFmpeg has no caption support. Mac: brew uninstall ffmpeg && brew install ffmpeg-full.")
+
+
+def c_x264():
+    if not config.FFMPEG:
+        return _r(False, "FFmpeg missing", "Install FFmpeg first.")
+    ok = "libx264" in _cmd([config.FFMPEG, "-hide_banner", "-encoders"])
+    return _r(ok, "libx264 " + ("found" if ok else "missing"), "Install a full FFmpeg build (Mac: brew install ffmpeg-full).")
+
+
+def c_whisper():
+    wv = _v("faster-whisper")
+    return _r(bool(wv), f"faster-whisper {wv or 'missing'}", "Run ./start.sh again to install the Python packages.")
+
+
+def c_av():
+    av = _v("av")
+    if not av:
+        return _r(False, "av missing", "Run ./start.sh again.")
+    return _r(int(av.split(".")[0]) < 17, f"av {av}", "Run: backend/.venv/bin/pip install 'av>=14,<17'")
+
+
+def c_opencv():
     cv = _v("opencv-python-headless")
     try:
         import cv2
-        has_cc = hasattr(cv2, "CascadeClassifier")
+        ok = hasattr(cv2, "CascadeClassifier")
     except Exception:  # noqa: BLE001
-        has_cc = False
-    add("opencv", "Face detection (OpenCV 4.x)", has_cc, f"opencv {cv or 'missing'}", "Run: backend/.venv/bin/pip install 'opencv-python-headless>=4.10,<5'")
+        ok = False
+    return _r(ok, f"opencv {cv or 'missing'}", "Run: backend/.venv/bin/pip install 'opencv-python-headless>=4.10,<5'")
 
-    yd, ejs = _v("yt-dlp"), _v("yt-dlp-ejs")
-    js = shutil.which("node") or shutil.which("deno")
-    add("ytdlp", "YouTube downloader (yt-dlp, only for links)", bool(yd), f"yt-dlp {yd or 'missing'}", "Run ./start.sh again.", None if yd else "warn")
-    if yd:
-        add("ejs", "YouTube challenge solver + JavaScript runtime", bool(ejs and js), f"yt-dlp-ejs {ejs or 'missing'}, runtime: {js or 'none'}",
-            "Install Node.js (Mac: brew install node) and run: backend/.venv/bin/pip install -U 'yt-dlp[default]'", "warn")
 
+def c_ytdlp():
+    yd = _v("yt-dlp")
+    return _r(bool(yd), f"yt-dlp {yd or 'missing'}", "Run ./start.sh again.", "warn")
+
+
+def c_ejs():
+    ejs, js = _v("yt-dlp-ejs"), shutil.which("node") or shutil.which("deno")
+    return _r(bool(ejs and js), f"yt-dlp-ejs {ejs or 'missing'}, runtime: {js or 'none'}", "Install Node.js (Mac: brew install node) and run: backend/.venv/bin/pip install -U 'yt-dlp[default]'", "warn")
+
+
+def c_datadir():
     d = config.DATA_DIR
     try:
         d.mkdir(parents=True, exist_ok=True)
         t = d / ".write_test"
         t.write_text("x")
         t.unlink()
-        writable = True
+        return _r(True, str(d))
     except OSError:
-        writable = False
-    add("datadir", "Data folder is writable", writable, str(d), "Set CLIPFORGE_DATA to a folder you can write to.")
-    free = shutil.disk_usage(d if d.exists() else Path.home()).free / 1e9
-    add("disk", "Free disk space", free >= 5, f"{free:.1f} GB free", "Free some space: videos need several GB. Use 'Delete downloaded video' or the bundle cleanup.", "error" if free < 2 else "warn")
-    synced = any(s in str(d) for s in ("com~apple~CloudDocs", "/Desktop/", "/Documents/", "Dropbox", "OneDrive"))
-    add("sync", "Data is not inside a cloud-synced folder", not synced, "synced folder" if synced else "local folder", "Set CLIPFORGE_DATA to a folder outside Desktop/Documents/Dropbox.", "warn")
-    nfonts = len(list(config.FONTS_DIR.glob("*.ttf")))
-    add("fonts", "Caption fonts", nfonts > 0, f"{nfonts} fonts", "Run ./scripts/fetch_fonts.sh (needs internet). System fonts still work.", "warn")
+        return _r(False, str(d), "Set FRAMEFLOW_DATA to a folder you can write to.")
 
+
+def c_disk():
+    d = config.DATA_DIR
+    free = shutil.disk_usage(d if d.exists() else Path.home()).free / 1e9
+    return _r(free >= 5, f"{free:.1f} GB free", "Free some space on the Storage page: videos need several GB.", "error" if free < 2 else "warn")
+
+
+def c_sync():
+    d = str(config.DATA_DIR)
+    synced = any(x in d for x in ("com~apple~CloudDocs", "/Desktop/", "/Documents/", "Dropbox", "OneDrive"))
+    return _r(not synced, "synced folder" if synced else "local folder", "Set FRAMEFLOW_DATA to a folder outside Desktop/Documents/Dropbox.", "warn")
+
+
+def c_fonts():
+    n = len(list(config.FONTS_DIR.glob("*.ttf")))
+    return _r(n > 0, f"{n} fonts", "Run ./scripts/fetch_fonts.sh (needs internet). System fonts still work.", "warn")
+
+
+def c_model():
     cache = Path.home() / ".cache" / "huggingface" / "hub"
     have = [p.name.split("--")[-1] for p in cache.glob("models--Systran--faster-whisper-*")] if cache.exists() else []
-    add("model", "Speech model downloaded", bool(have), ("cached: " + ", ".join(have)) if have else "not downloaded yet",
-        "Downloads automatically the first time you process a video (needs internet, ~480 MB for 'small').", "warn")
+    return _r(bool(have), ("cached: " + ", ".join(have)) if have else "not downloaded yet",
+              "Downloads automatically the first time you process a video (needs internet, ~480 MB for 'small').", "warn")
 
-    if network:
-        import httpx
-        for key, name, url in (("net_hf", "Reach Hugging Face (model download)", "https://huggingface.co"), ("net_yt", "Reach YouTube (links)", "https://www.youtube.com/generate_204")):
+
+def _net(url: str):
+    import httpx
+    try:
+        r = httpx.get(url, timeout=5, follow_redirects=True)
+        return _r(r.status_code < 500, f"HTTP {r.status_code}", "Check your internet connection / VPN.", "warn")
+    except Exception as e:  # noqa: BLE001
+        return _r(False, e.__class__.__name__, "Check your internet connection / VPN / firewall.", "warn")
+
+
+# (id, name, function, needs_network)
+REGISTRY = [
+    ("python", "Python 3.10 or newer", c_python, False), ("ffmpeg", "FFmpeg installed", c_ffmpeg, False),
+    ("libass", "FFmpeg can burn in captions (libass)", c_libass, False), ("x264", "FFmpeg can write H.264 video", c_x264, False),
+    ("whisper", "Speech recognition (faster-whisper)", c_whisper, False), ("av", "Audio library compatible with faster-whisper", c_av, False),
+    ("opencv", "Face detection (OpenCV 4.x)", c_opencv, False), ("ytdlp", "YouTube downloader (yt-dlp, only for links)", c_ytdlp, False),
+    ("ejs", "YouTube challenge solver + JavaScript runtime", c_ejs, False), ("datadir", "Data folder is writable", c_datadir, False),
+    ("disk", "Free disk space", c_disk, False), ("sync", "Data is not inside a cloud-synced folder", c_sync, False),
+    ("fonts", "Caption fonts", c_fonts, False), ("model", "Speech model downloaded", c_model, False),
+    ("net_hf", "Reach Hugging Face (model download)", lambda: _net("https://huggingface.co"), True),
+    ("net_yt", "Reach YouTube (links)", lambda: _net("https://www.youtube.com/generate_204"), True),
+]
+
+
+def steps(network: bool = True) -> list:
+    return [{"id": i, "name": n} for i, n, _, net in REGISTRY if network or not net]
+
+
+def run_check(check_id: str) -> dict:
+    for i, n, fn, _ in REGISTRY:
+        if i == check_id:
             try:
-                r = httpx.get(url, timeout=5, follow_redirects=True)
-                add(key, name, r.status_code < 500, f"HTTP {r.status_code}", "Check your internet connection / VPN.", "warn")
-            except Exception as e:  # noqa: BLE001
-                add(key, name, False, e.__class__.__name__, "Check your internet connection / VPN / firewall.", "warn")
-    return out
+                return {"id": i, "name": n, **fn()}
+            except Exception as e:  # noqa: BLE001 - a crashing check must not break the run
+                return {"id": i, "name": n, **_r(False, f"check crashed: {e.__class__.__name__}: {e}", "Run the diagnostic report and send it to whoever is helping you.", "warn")}
+    raise KeyError(check_id)
+
+
+def run_checks(network: bool = True) -> list:
+    return [run_check(s["id"]) for s in steps(network)]
 
 
 def report(network: bool = True) -> str:
