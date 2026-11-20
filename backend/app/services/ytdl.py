@@ -107,7 +107,8 @@ def download_segment(url: str, start: float, end: float, out_dir: Path, name: st
     return files[0]
 
 
-def download_audio(url: str, out_dir: Path, on_progress: Optional[Callable[[float], None]] = None, cancelled: Optional[Callable[[], bool]] = None) -> Path:
+def download_audio(url: str, out_dir: Path, on_progress: Optional[Callable[[float], None]] = None, cancelled: Optional[Callable[[], bool]] = None,
+                   start: float = 0.0, end: float = 0.0) -> Path:
     """Audio-only download (used only when a video has no public captions); the caller deletes it after transcription."""
     try:
         import yt_dlp
@@ -125,6 +126,9 @@ def download_audio(url: str, out_dir: Path, on_progress: Optional[Callable[[floa
 
     opts = {"format": "worstaudio[ext=m4a]/worstaudio/ba[abr<=128]/ba", "outtmpl": str(out_dir / "audio_src.%(ext)s"), "noplaylist": True, "quiet": True, "no_warnings": True,
             "noprogress": True, "progress_hooks": [hook], "retries": 3, "socket_timeout": 30}
+    if end > start:  # only the chosen section is downloaded
+        from yt_dlp.utils import download_range_func
+        opts["download_ranges"] = download_range_func(None, [(max(0.0, start), end)])
     _download(opts, url)
     files = list(out_dir.glob("audio_src.*"))
     if not files:

@@ -26,7 +26,7 @@ def _model(size: str):
 
 
 def transcribe(audio: Path, out_json: Path, size: str = "small", language: str = "auto", duration: float = 0.0,
-               on_progress: Optional[Callable[[float, str], None]] = None) -> dict:
+               on_progress: Optional[Callable[[float, str], None]] = None, offset: float = 0.0) -> dict:
     if on_progress:
         on_progress(0, f"Loading speech model “{size}” (downloaded once, then cached)")
     try:
@@ -50,6 +50,11 @@ def transcribe(audio: Path, out_json: Path, size: str = "small", language: str =
                 words.append({"w": t, "s": round(w.start, 3), "e": round(w.end, 3)})
         if on_progress and duration:
             on_progress(min(99.0, seg.end / duration * 100), f"Transcribing… {int(seg.end)}s of {int(duration)}s")
+    if offset:  # the audio was only a section of the video: put every time back on the video's own timeline
+        for w in words:
+            w["s"], w["e"] = round(w["s"] + offset, 3), round(w["e"] + offset, 3)
+        for sg in segs:
+            sg["start"], sg["end"] = round(sg["start"] + offset, 3), round(sg["end"] + offset, 3)
     data = {"language": info.language, "language_probability": round(info.language_probability, 3),
             "model": size, "segments": segs, "words": words}
     out_json.write_text(json.dumps(data, ensure_ascii=False))

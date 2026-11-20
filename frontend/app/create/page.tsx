@@ -35,15 +35,19 @@ export default function Create() {
                 <button key={id} type="button" onClick={() => setGoal(id)} className={`rounded-md border p-3 text-left ${goal === id ? "border-primary bg-primary/10" : "border-input"}`}><div className="text-sm font-medium">{t}</div><div className="text-xs text-muted-foreground">{d}</div></button>))}
             </div>
           </div>
+          <div className="sm:col-span-2 rounded-md border p-3">
+            <Label>Only use part of the video (optional)</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Input placeholder="Start, e.g. 0:00" value={rs} onChange={(e) => setRs(e.target.value)} /></div>
+              <div><Input placeholder="Stop, e.g. 1:30:00 (blank = until the end)" value={re} onChange={(e) => setRe(e.target.value)} /></div>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">Saves a lot of time on long videos: only this section is downloaded (YouTube audio) and transcribed. Times are m:ss or h:mm:ss. Example: a 20-hour stream, section 2:00:00 to 3:00:00, takes about 7 minutes to transcribe instead of ~2 hours.</p>
+          </div>
           {goal === "moments" ? <div className="sm:col-span-2"><DurationPicker value={dur} onChange={setDur} /></div> : (
             <div className="space-y-3 sm:col-span-2">
               <div><Label>Length of each part</Label>
                 <div className="flex flex-wrap gap-2">{[45, 60, 90, 120].map((n) => <button key={n} type="button" onClick={() => setPartLen(n)} className={`rounded-md border px-3 py-1.5 text-sm ${partLen === n ? "border-primary bg-primary/15 text-primary" : "border-input text-muted-foreground"}`}>{n} s</button>)}
                   <Input type="number" min={10} max={180} className="w-24" value={partLen} onChange={(e) => setPartLen(Number(e.target.value))} /></div></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Start at (optional, m:ss)</Label><Input placeholder="0:00" value={rs} onChange={(e) => setRs(e.target.value)} /></div>
-                <div><Label>Stop at (optional, m:ss)</Label><Input placeholder="end of video" value={re} onChange={(e) => setRe(e.target.value)} /></div>
-              </div>
               <p className="text-xs text-muted-foreground">A 1-hour video at 60 s makes about 60 parts. Use the start/stop range to make a series from just one section.</p>
             </div>
           )}
@@ -65,8 +69,8 @@ export default function Create() {
 
 type Common = { dur: DurationValue; lang: string; maxClips: number; mode: "moments" | "series"; partLen: number; rangeStart: number; rangeEnd: number };
 const qs = (c: Common) => `min_dur=${c.dur.min}&max_dur=${c.dur.max}&max_clips=${c.maxClips}&language=${c.lang}` +
-  (c.mode === "series" ? `&mode=series&part_len=${c.partLen}&range_start=${c.rangeStart}&range_end=${c.rangeEnd}` : "");
-const durOk = (c: Common) => (c.mode === "series" ? c.partLen >= 10 && c.partLen <= 180 && (!c.rangeEnd || c.rangeEnd > c.rangeStart) : c.dur.min >= 5 && c.dur.max > c.dur.min && c.dur.max <= 180);
+  (c.mode === "series" ? `&mode=series&part_len=${c.partLen}` : "") + (c.rangeStart ? `&range_start=${c.rangeStart}` : "") + (c.rangeEnd ? `&range_end=${c.rangeEnd}` : "");
+const durOk = (c: Common) => (!c.rangeEnd || c.rangeEnd > c.rangeStart) && (c.mode === "series" ? c.partLen >= 10 && c.partLen <= 180 : c.dur.min >= 5 && c.dur.max > c.dur.min && c.dur.max <= 180);
 
 function UploadPane(c: Common) {
   const router = useRouter();
@@ -172,7 +176,7 @@ function LivePane(c: Common) {
   }, [pid]);
   const create = async () => {
     setBusy(true); setErr("");
-    try { const r = await api<{ project_id: string }>("/projects/live", { body: { url: u, name, authorized: ok, language: c.lang } }); await api(`/projects/${r.project_id}`, { method: "PATCH", body: { prefs: { min_dur: c.dur.min, max_dur: c.dur.max, max_clips: c.maxClips, ...(c.mode === "series" ? { mode: "series", part_len: c.partLen, range_start: c.rangeStart, range_end: c.rangeEnd } : {}) } } }); setPid(r.project_id); }
+    try { const r = await api<{ project_id: string }>("/projects/live", { body: { url: u, name, authorized: ok, language: c.lang } }); await api(`/projects/${r.project_id}`, { method: "PATCH", body: { prefs: { min_dur: c.dur.min, max_dur: c.dur.max, max_clips: c.maxClips, ...(c.mode === "series" ? { mode: "series", part_len: c.partLen } : {}), range_start: c.rangeStart, range_end: c.rangeEnd } } }); setPid(r.project_id); }
     catch (e: any) { setErr(e.message); } setBusy(false);
   };
   const ctl = async (a: string) => {

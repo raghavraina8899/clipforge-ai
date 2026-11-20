@@ -102,8 +102,9 @@ def encoders() -> dict:
     }
 
 
-def extract_audio(src: Path, dst: Path, ctx=None, on_progress=None, duration=0.0) -> None:
-    run(["-i", src, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", dst], duration, ctx, on_progress)
+def extract_audio(src: Path, dst: Path, ctx=None, on_progress=None, duration=0.0, start: float = 0.0, length: Optional[float] = None) -> None:
+    pre = (["-ss", f"{start:.3f}"] if start else []) + (["-t", f"{length:.3f}"] if length else [])
+    run([*pre, "-i", src, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", dst], length or duration, ctx, on_progress)
 
 
 def make_proxy(src: Path, dst: Path, duration: float, ctx=None, on_progress=None) -> None:

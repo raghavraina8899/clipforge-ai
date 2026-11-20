@@ -88,7 +88,9 @@ def run_analysis(pid: str, ctx: JobCtx, p0: float = 0, p1: float = 100) -> None:
         res = analyze.series(tr["words"], dur_total, float(prefs.get("part_len") or 60), float(prefs.get("range_start") or 0),
                              float(prefs["range_end"]) if prefs.get("range_end") else None)
     else:
-        res = analyze.analyze(tr["words"], dur_total, proj["name"], float(prefs["min_dur"]), float(prefs["max_dur"]), int(prefs["max_clips"]))
+        rs, re_ = float(prefs.get("range_start") or 0), float(prefs.get("range_end") or 0)
+        words_in = [w for w in tr["words"] if w["s"] >= rs - 0.01 and (not re_ or w["e"] <= re_ + 0.01)]
+        res = analyze.analyze(words_in, dur_total, proj["name"], float(prefs["min_dur"]), float(prefs["max_dur"]), int(prefs["max_clips"]))
     n = make_clips(pid, res)
     db.update("projects", pid, analysis={"summary": res["summary"], "engine": res["engine"], "note": res["note"], "clips": n, "mode": prefs.get("mode", "moments"),
                                           "language": tr.get("language"), "word_timing": tr.get("word_timing", "precise"),
@@ -120,13 +122,20 @@ def ingest_job(pid: str):
             ffmpeg.make_proxy(video, P["proxy"], meta["duration"], ctx, lambda p: ctx.update("Creating preview", 4 + p * 0.2, f"Encoding preview {p:.0f}%"))
             db.update("projects", pid, proxy_path=str(P["proxy"]), thumb_path=str(P["thumb"]))
             ctx.update("Extracting audio", 25, "Converting audio to 16 kHz mono")
-            ffmpeg.extract_audio(video, P["audio"], ctx, lambda p: ctx.update(None, 25 + p * 0.05), meta["duration"])
             prefs = {**DEFAULT_PREFS, **(proj.get("prefs") or {})}
+            rs = float(prefs.get("range_start") or 0)
+            re_ = min(float(prefs.get("range_end") or 0) or meta["duration"], meta["duration"])
+            if rs >= re_ - 1:
+                rs, re_ = 0.0, meta["duration"]
+            span = re_ - rs
+            ranged = span < meta["duration"] - 1
+            ffmpeg.extract_audio(video, P["audio"], ctx, lambda p: ctx.update(None, 25 + p * 0.05), meta["duration"], start=rs, length=span if ranged else None)
             size = settings_store.load()["transcription"]["model"]
             lang = prefs.get("language") or "auto"
             ctx.update("Transcribing speech", 30)
-            tr = transcribe.transcribe(P["audio"], P["transcript"], size, lang, meta["duration"],
-                                       lambda p, m: (ctx.update("Transcribing speech", 30 + p * 0.5, m)))
+            tr = transcribe.transcribe(P["audio"], P["transcript"], size, lang, span,
+                                       lambda p, m: (ctx.update("Transcribing speech", 30 + p * 0.5, m + (f" (section {rs / 60:.0f}-{re_ / 60:.0f} min only)" if ranged else ""))),
+                                       offset=rs if ranged else 0.0)
             P["audio"].unlink(missing_ok=True)
             if not tr["words"]:
                 db.update("projects", pid, status="ready", language=tr["language"],
