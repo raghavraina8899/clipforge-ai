@@ -25,6 +25,7 @@ export default function ProjectPage() {
   const [maxClips, setMaxClips] = useState(8);
   const [bundleOpts, setBundleOpts] = useState({ delSource: true, delExports: true });
   const [bundling, setBundling] = useState(false);
+  const bundleJobs = useRef<string[]>([]); const bundleStop = useRef(false);
   const [bundleMsg, setBundleMsg] = useState("");
   const [regenMode, setRegenMode] = useState<"moments" | "series">("moments");
   const [regenPart, setRegenPart] = useState(60);
@@ -106,15 +107,17 @@ export default function ProjectPage() {
     `After the bundle download finishes, Frameflow will delete from this computer:\n${bundleOpts.delSource ? "• the downloaded/uploaded video copy\n" : ""}${bundleOpts.delExports ? "• the exported clip files of this project\n" : ""}\nThe ZIP in your Downloads folder will then be the only copy of the clips. Continue?`);
   const renderAllAndDownload = async () => {
     if (!confirmCleanup()) return;
-    setBundleMsg(""); setBundling(true);
+    setBundleMsg(""); setBundling(true); bundleStop.current = false; bundleJobs.current = [];
     try {
       const todo = selected.filter((c) => !c.exports.length);
       if (todo.length) {
         const r = await api<{ jobs: { clip_id: string; job_id: string }[] }>(`/projects/${id}/render`, { body: { clip_ids: todo.map((c) => c.id) } });
         setRenders((x) => ({ ...x, ...Object.fromEntries(r.jobs.map((j) => [j.clip_id, j.job_id])) }));
+        bundleJobs.current = r.jobs.map((j) => j.job_id);
         for (const j of r.jobs) {
           setBundleMsg(`Rendering clips… (${r.jobs.indexOf(j) + 1}/${r.jobs.length})`);
           for (;;) {
+            if (bundleStop.current) throw new Error("Bundle cancelled. Clips already finished are kept.");
             const st = await api<Job>(`/jobs/${j.job_id}`);
             if (st.status === "done") break;
             if (st.status === "error" || st.status === "cancelled") throw new Error(st.error || "A clip failed to render, so the bundle was not downloaded.");
@@ -127,6 +130,11 @@ export default function ProjectPage() {
       downloadBundle(selected.map((c) => c.id));
     } catch (e: any) { setErr(e.message); setBundleMsg(""); }
     setBundling(false);
+  };
+  const cancelBundle = async () => {
+    bundleStop.current = true;
+    await Promise.all(bundleJobs.current.map((j) => api(`/jobs/${j}/cancel`, { method: "POST" }).catch(() => {})));
+    setRenders({}); setBundleMsg("Bundle cancelled."); setBundling(false); refresh();
   };
   const totalExports = clips.reduce((n, c) => n + c.exports.length, 0);
 
@@ -155,13 +163,13 @@ export default function ProjectPage() {
       {err && <div className="mb-4"><Notice kind="error">{err}</Notice></div>}
       {busy && (
         <Card className="mb-5 p-4">
-          {job ? <JobBar job={job} onCancel={() => api(`/jobs/${job.id}/cancel`, { method: "POST" })} /> : <div className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" />Processing…</div>}
+          {job ? <JobBar job={job} onCancel={async () => { await api(`/jobs/${job.id}/cancel`, { method: "POST" }).catch(() => {}); setJobId(null); refresh(); }} /> : <div className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" />Processing…</div>}
           <p className="mt-2 text-xs text-muted-foreground">The first transcription downloads the speech model once (needs internet); later runs are offline. Large videos take a while: progress above is measured, not estimated.</p>
         </Card>
       )}
       {p.status === "error" && !busy && (
         <div className="mb-5 space-y-3"><Notice kind="error"><b>Processing failed.</b> {p.error}</Notice>
-          {p.source_type === "youtube" && <Button variant="secondary" onClick={async () => { try { const r = await api<{ job_id: string }>(`/projects/${id}/retry`, { method: "POST", body: {} }); setJobId(r.job_id); refresh(); } catch (e: any) { setErr(e.message); } }}><RefreshCw className="h-4 w-4" />Try again</Button>}
+          {(p.source_type === "youtube" || p.has_video) && <Button variant="secondary" onClick={async () => { try { const r = await api<{ job_id: string }>(`/projects/${id}/retry`, { method: "POST", body: {} }); setJobId(r.job_id); refresh(); } catch (e: any) { setErr(e.message); } }}><RefreshCw className="h-4 w-4" />Try again</Button>}
         </div>
       )}
       {p.analysis?.devanagari && !busy && (
@@ -196,6 +204,7 @@ export default function ProjectPage() {
               <p className="mt-1 text-xs text-muted-foreground">One ZIP with <code>videos/</code>, <code>subtitles/</code>, <code>thumbnails/</code>, <code>text/</code> and an <code>INDEX.txt</code>, numbered in order. Uses the clips ticked below ({selected.length}).</p></div>
             <div className="flex flex-wrap gap-2">
               <Button disabled={!selected.length || !p.can_render || bundling} onClick={renderAllAndDownload}>{bundling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}Render all &amp; download bundle</Button>
+              {bundling && <Button variant="danger" onClick={cancelBundle}>Cancel</Button>}
               <Button variant="secondary" disabled={!exportedSelected.length || bundling} onClick={() => { if (confirmCleanup()) downloadBundle(exportedSelected.map((c) => c.id)); }}><Download className="h-4 w-4" />Download bundle ({exportedSelected.length} exported)</Button>
             </div>
           </div>
@@ -252,10 +261,13 @@ function RenderChip({ jobId, onDone }: { jobId: string; onDone: () => void }) {
 
 function AttachVideo({ project, onStarted }: { project: Project; onStarted: (jobId: string) => void }) {
   const [pct, setPct] = useState<number | null>(null); const [err, setErr] = useState(""); const [ok, setOk] = useState(false);
+  const abortUp = useRef<(() => void) | undefined>(undefined);
   const acc = project.analysis?.access;
   const go = async (f?: File) => {
     if (!f) return; setErr(""); setPct(0);
-    try { const r = await upload<{ job_id: string }>(`/projects/${project.id}/video?filename=${encodeURIComponent(f.name)}`, f, setPct).promise; setPct(null); onStarted(r.job_id); }
+    const u = upload<{ job_id: string }>(`/projects/${project.id}/video?filename=${encodeURIComponent(f.name)}`, f, setPct);
+    abortUp.current = u.abort;
+    try { const r = await u.promise; setPct(null); onStarted(r.job_id); }
     catch (e: any) { setErr(e.message); setPct(null); }
   };
   return (
@@ -286,6 +298,7 @@ function AttachVideo({ project, onStarted }: { project: Project; onStarted: (job
         </div>
       )}
       <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"><FileVideo className="h-4 w-4" />Choose video file<input type="file" accept="video/*,.mkv,.avi,.ts" className="hidden" onChange={(e) => go(e.target.files?.[0])} /></label>
+      {pct !== null && <button className="text-xs text-muted-foreground underline" onClick={() => abortUp.current?.()}>Cancel upload</button>}
       {pct !== null && <JobLoader variant="upload" job={{ stage: pct < 100 ? "Uploading" : "Reading the video", progress: pct, message: pct < 100 ? "Sending your file to Frameflow on this computer" : "Checking the file", status: "running" }} />}
       {err && <Notice kind="error">{err}</Notice>}
     </Card>

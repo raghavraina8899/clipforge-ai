@@ -44,6 +44,11 @@ Run: `./start.sh` → http://localhost:3000 (API on 127.0.0.1:8000).
 - Storage page lists everything on disk per project (source, preview copy, temp clips, exports, whole project), leftovers, logs, uploaded audio and speech models with sizes; select / select all / safe-only and delete.
 - System check (About page, `./doctor.sh`) + copyable diagnostic report; cancel now kills frozen downloads; audio-only analysis downloads the whole audio then cuts the range.
 
+## Cancel behaviour (fixed 2026-11-20)
+- Job scheduler rewritten: cancelled queued jobs never start or flip back to "running"; cancelling a frozen job frees its run slot immediately (a frozen download used to block every later job); ghost jobs can be cancelled; leaving a clip cancels its not-yet-started preview download.
+- Cancel buttons: processing/analysis, export, clip preview, bundle (render all & download), file uploads. Cancelled imports and failed/cancelled projects have **Try again** (YouTube, uploads, live recordings). A cancelled export deletes its partial file.
+- Tested: queue/cancel scheduler, import cancel + retry, mid-export cancel. Not tested with a real YouTube preview download.
+
 ## Not yet verified / known gaps
 - Real YouTube segment/audio download end to end
 - Gemini with a real key and Ollama with a real model (only simulated)

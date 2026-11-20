@@ -357,6 +357,9 @@ def render_job(clip_id: str, settings_override: Optional[dict] = None):
                 info = render.render_clip(Path(proj["video_path"]), proj["meta"], P["proxy"] if P["proxy"].exists() else None, clip, st, words, out,
                                           work, ctx, lambda p, m: ctx.update("Rendering clip", p, m))
                 rel_words = [{"w": w["w"], "s": w["s"] - clip["start"], "e": w["e"] - clip["start"]} for w in words]
+        except BaseException:
+            out.unlink(missing_ok=True)  # cancelled or failed: never leave a half-written video behind
+            raise
         finally:
             shutil.rmtree(work, ignore_errors=True)  # temp download + render scratch files; exports are kept
         if segment_mode:  # export is done: remove the temporary preview download too

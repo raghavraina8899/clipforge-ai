@@ -451,42 +451,23 @@ class Live(BaseModel):
 
 
 @router.post("/projects/{pid}/retry")
-def retry_youtube(pid: str):
+def retry_project(pid: str):
+    """Run a failed or cancelled project again (YouTube: restart the analysis; upload/live: redo import + transcription from the saved file)."""
     p = get_project(pid)
-    if p["source_type"] != "youtube":
-        err(400, "Only YouTube projects can be retried this way.")
     if active_job(pid):
         err(409, "Already processing.")
-    meta = p.get("meta") or {}
-    try:
-        info = sources.youtube_info(p["source_url"])
-    except ValueError as e:
-        err(400, str(e))
+    if p["source_type"] == "youtube":
+        meta = p.get("meta") or {}
+        try:
+            info = sources.youtube_info(p["source_url"])
+        except ValueError as e:
+            err(400, str(e))
+        db.update("projects", pid, status="processing", error=None)
+        return {"job_id": jobs.submit("analyze", youtube_job(pid, info, p["source_url"], bool(meta.get("yt_authorized"))), project_id=pid)}
+    if not p.get("video_path") or not Path(p["video_path"]).exists():
+        err(400, "The video file is no longer stored, so this project cannot be re-run. Attach the video again.")
     db.update("projects", pid, status="processing", error=None)
-    return {"job_id": jobs.submit("analyze", youtube_job(pid, info, p["source_url"], bool(meta.get("yt_authorized"))), project_id=pid)}
-
-
-@router.post("/projects/{pid}/romanize")
-def romanize_project(pid: str):
-    """Convert an existing Devanagari transcript (and clip titles/hooks) to Hinglish, no re-transcription needed."""
-    from ..services import hinglish
-    get_project(pid)
-    tr = pipeline.load_transcript(pid)
-    if not tr:
-        err(404, "No transcript yet.")
-    with pipeline._tr_lock:
-        n = hinglish.romanize_words(tr["words"])
-        for sg in tr.get("segments", []):
-            sg["text"] = hinglish.romanize(sg["text"])
-        pipeline.paths(pid)["transcript"].write_text(json.dumps(tr, ensure_ascii=False))
-    for c in db.many("SELECT id, title, hook, caption, reason FROM clips WHERE project_id=?", (pid,)):
-        db.update("clips", c["id"], title=hinglish.romanize(c["title"] or ""), hook=hinglish.romanize(c["hook"] or ""),
-                  caption=hinglish.romanize(c["caption"] or ""), reason=hinglish.romanize(c["reason"] or ""))
-    p = get_project(pid)
-    an = dict(p.get("analysis") or {})
-    an["summary"] = hinglish.romanize(an.get("summary") or "")
-    db.update("projects", pid, analysis={**an, "devanagari": False}, prefs={**(p.get("prefs") or {}), "language": "hinglish"})
-    return {"converted_words": n}
+    return {"job_id": jobs.submit("ingest", pipeline.ingest_job(pid), project_id=pid)}
 
 
 @router.post("/projects/{pid}/download-full")
@@ -974,5 +955,5 @@ def project_jobs(pid: str):
 
 
 @router.post("/jobs/{jid}/cancel")
-def cancel(jid: str):
-    return {"cancelled": jobs.cancel(jid)}
+def cancel(jid: str, only_queued: int = 0):
+    return {"cancelled": jobs.cancel(jid, bool(only_queued))}

@@ -41,7 +41,10 @@ export function ClipEditor({ project, clip, fonts, patch, refresh }: { project: 
   }, [clip.id, urlOnly]); // eslint-disable-line
   const loadPvRef = useRef<() => void>(undefined);
   loadPvRef.current = loadPv;
-  const pvJobState = useJob(pvJob, (j) => { setPvJob(null); if (j.status === "done") { loadPv(); } else if (j.status === "error") setPvErr(j.error || "Preview failed"); });
+  const pvJobState = useJob(pvJob, (j) => { setPvJob(null); if (j.status === "done") { loadPv(); } else if (j.status === "error") setPvErr(j.error || "Preview failed"); else if (j.status === "cancelled") setPvErr("Preview cancelled."); });
+  const pvJobRef = useRef<string | null>(null); pvJobRef.current = pvJob;
+  // leaving this clip: stop a preview download that has not started yet, so clicking through clips does not pile up requests
+  useEffect(() => () => { const id = pvJobRef.current; if (id) api(`/jobs/${id}/cancel?only_queued=1`, { method: "POST" }).catch(() => {}); }, [clip.id]);
   const rangeKey = `${clip.start.toFixed(1)}-${clip.end.toFixed(1)}`;
   useEffect(() => { if (!pvJob) { const t = setTimeout(loadPv, 700); return () => clearTimeout(t); } }, [clip.id, rangeKey, urlOnly]); // eslint-disable-line
 
@@ -69,7 +72,7 @@ export function ClipEditor({ project, clip, fonts, patch, refresh }: { project: 
         ) : urlOnly ? (
           <Card className="space-y-3 p-4">
             {pvErr ? <Notice kind="error">{pvErr}<div className="mt-2"><Button size="sm" variant="secondary" onClick={loadPv}>Try again</Button></div></Notice>
-              : pvJobState ? <JobBar job={pvJobState} onCancel={() => api(`/jobs/${pvJobState.id}/cancel`, { method: "POST" })} />
+              : pvJobState ? <JobBar job={pvJobState} onCancel={async () => { await api(`/jobs/${pvJobState.id}/cancel`, { method: "POST" }).catch(() => {}); setPvJob(null); setPvErr("Preview cancelled."); }} />
               : <p className="text-sm text-muted-foreground">Preparing preview…</p>}
             <p className="text-xs text-muted-foreground">Only this clip’s short segment is downloaded (480p). It is deleted after you export the clip.</p>
           </Card>

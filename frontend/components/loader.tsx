@@ -53,12 +53,14 @@ function useTiming(progress: number, active: boolean) {
   return { elapsed, eta };
 }
 
-export interface LoaderJob { stage: string; progress: number; message: string | null; status: string }
+export interface LoaderJob { stage: string; progress: number; message: string | null; status: string; error?: string | null }
 
 export function JobLoader({ job, variant = "process", onCancel, compact = false, title }: { job: LoaderJob | null; variant?: "process" | "export" | "upload"; onCancel?: () => void; compact?: boolean; title?: string }) {
   const active = !!job && ["queued", "running"].includes(job.status);
   const { elapsed, eta } = useTiming(job?.progress ?? 0, active);
   if (!job) return null;
+  if (job.status === "cancelled") return <div className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm"><span className="text-warning">✕</span>Cancelled. Nothing was changed.</div>;
+  if (job.status === "error") return <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">Failed: {job.error || job.message || "unknown error"}</div>;
   const p = job.progress;
   const heading = title || (variant === "export" ? "Exporting your clip" : variant === "upload" ? "Uploading" : job.stage);
 

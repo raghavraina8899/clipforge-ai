@@ -3,13 +3,13 @@ import logging
 import threading
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 from . import db
 
 log = logging.getLogger("jobs")
-_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="job")
+MAX_PARALLEL = 2
+_slots = threading.Semaphore(MAX_PARALLEL)  # how many jobs may run at once; waiting jobs are cheap threads that can be cancelled
 _ctxs: dict = {}
 
 
@@ -22,6 +22,19 @@ class JobCtx:
         self.id = job_id
         self.cancelled = threading.Event()
         self.procs: list = []  # subprocesses to kill on cancel
+        self._slot_lock = threading.Lock()
+        self._owns_slot = False
+
+    def _take_slot(self):
+        with self._slot_lock:
+            self._owns_slot = True
+
+    def release_slot(self):
+        """Give the run slot back (once). Called when the job ends, or immediately on cancel so a frozen worker cannot block other jobs."""
+        with self._slot_lock:
+            if self._owns_slot:
+                self._owns_slot = False
+                _slots.release()
 
     def update(self, stage: Optional[str] = None, progress: Optional[float] = None, message: Optional[str] = None):
         if self.cancelled.is_set():
@@ -56,22 +69,30 @@ def submit(kind: str, fn: Callable[[JobCtx], Optional[dict]], project_id=None, c
     _ctxs[jid] = ctx
 
     def run():
-        db.update("jobs", jid, status="running", stage="Starting")
         try:
-            result = fn(ctx)
-            db.update("jobs", jid, status="done", progress=100, stage="Done", result=result or {})
-        except Cancelled:
-            db.update("jobs", jid, status="cancelled", stage="Cancelled", message="Cancelled by user")
-        except Exception as e:  # noqa: BLE001 - surfaced to the user verbatim
-            if ctx.cancelled.is_set():  # killed on purpose: not a failure
-                db.update("jobs", jid, status="cancelled", stage="Cancelled", message="Cancelled by user")
-            else:
-                log.error("job %s (%s) failed: %s\n%s", jid, kind, e, traceback.format_exc())
-                db.update("jobs", jid, status="error", stage="Failed", error=str(e) or e.__class__.__name__)
+            # wait for a free slot; a job cancelled while waiting never starts and never touches its status again
+            while not _slots.acquire(timeout=0.4):
+                if ctx.cancelled.is_set():
+                    return
+            ctx._take_slot()
+            if ctx.cancelled.is_set():
+                return
+            db.update("jobs", jid, status="running", stage="Starting")
+            try:
+                result = fn(ctx)
+                if not ctx.cancelled.is_set():
+                    db.update("jobs", jid, status="done", progress=100, stage="Done", result=result or {})
+            except Cancelled:
+                pass  # status was already set to 'cancelled' by cancel()
+            except Exception as e:  # noqa: BLE001 - surfaced to the user verbatim
+                if not ctx.cancelled.is_set():  # killed on purpose: not a failure
+                    log.error("job %s (%s) failed: %s\n%s", jid, kind, e, traceback.format_exc())
+                    db.update("jobs", jid, status="error", stage="Failed", error=str(e) or e.__class__.__name__)
         finally:
+            ctx.release_slot()
             _ctxs.pop(jid, None)
 
-    _pool.submit(run)
+    threading.Thread(target=run, daemon=True, name=f"job-{kind}-{jid[:6]}").start()
     return jid
 
 
@@ -93,17 +114,23 @@ def _kill_children(match: str) -> int:
     return n
 
 
-def cancel(jid: str) -> bool:
-    """Cancel now: flag the worker, kill hung child processes, and show 'cancelled' immediately even if the worker thread is stuck."""
-    ctx = _ctxs.get(jid)
-    if not ctx:
+def cancel(jid: str, only_queued: bool = False) -> bool:
+    """Cancel now: flag the worker, kill hung child processes, free its run slot and show 'cancelled' immediately,
+    even if the worker thread is stuck in a network call. Works for queued, running and orphaned ('ghost') jobs."""
+    row = db.one("SELECT project_id, kind, status FROM jobs WHERE id=?", (jid,))
+    if not row or row["status"] not in ("queued", "running"):
         return False
-    ctx.cancel()
-    row = db.one("SELECT project_id, kind FROM jobs WHERE id=?", (jid,))
-    if row and row.get("project_id"):
-        _kill_children(row["project_id"])
+    if only_queued and row["status"] != "queued":
+        return False
+    ctx = _ctxs.get(jid)
+    if ctx:
+        ctx.cancel()
+        if row.get("project_id"):
+            _kill_children(row["project_id"])
     db.update("jobs", jid, status="cancelled", stage="Cancelled", message="Cancelled by user")
-    if row and row.get("project_id") and row["kind"] in ("ingest", "analyze"):
+    if ctx:
+        ctx.release_slot()
+    if row.get("project_id") and row["kind"] in ("ingest", "analyze"):
         p = db.one("SELECT status FROM projects WHERE id=?", (row["project_id"],))
         if p and p["status"] == "processing":
             db.update("projects", row["project_id"], status="error", error="Cancelled. Press Try again to start again.")
