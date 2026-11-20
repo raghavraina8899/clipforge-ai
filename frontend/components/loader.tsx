@@ -94,10 +94,10 @@ export function JobLoader({ job, variant = "process", onCancel, compact = false,
   );
 }
 
-/** Full-area loader shown while a page fetches its data (also after a refresh). Fades in after 150 ms so fast loads do not flash. */
+/** Full-area loader shown while a page fetches its data (also after a refresh). Fades in after 60 ms. */
 export function PageLoader({ label = "Loading" }: { label?: string }) {
   return (
-    <div className="flex min-h-[55vh] flex-col items-center justify-center gap-6 opacity-0 animate-fade-up" style={{ animationDelay: "150ms" }}>
+    <div className="flex min-h-[55vh] flex-col items-center justify-center gap-6 opacity-0 animate-fade-up" style={{ animationDelay: "60ms" }}>
       <Cube size={72} />
       <div className="text-center">
         <div className="flex items-center justify-center gap-1 text-base font-medium">{label}

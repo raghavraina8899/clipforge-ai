@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Sidebar, MobileNav } from "@/components/sidebar";
+import { Splash, SplashController } from "@/components/splash";
 
 import { BRAND } from "@/lib/brand";
 
@@ -10,6 +11,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <body>
+        <Splash />
+        <SplashController />
         <div className="flex min-h-screen">
           <Sidebar />
           <div className="min-w-0 flex-1">
