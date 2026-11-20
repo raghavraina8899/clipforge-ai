@@ -23,10 +23,12 @@ export default function AISettings() {
   );
   const testGemini = () => run("test", async () => { const r = await api<any>("/settings/ai/test", { body: { provider: "gemini" } }); setModels(r.models); setMsg({ k: "ok", t: r.message }); if (!ai.gemini.model && r.models.length) { const pick = r.models.find((m: Model) => /flash/.test(m.id) && !/(lite|image|tts|live|thinking|exp|preview)/.test(m.id)) || r.models[0]; await put({ ai: { gemini: { model: pick.id } } }); } });
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <PageHeader title="AI Settings" subtitle="Frameflow works fully offline with its built-in analyzer. Add an AI provider for smarter clip ranking and better titles. Keys stay on this computer." />
       {msg && <div className="mb-4"><Notice kind={msg.k}>{msg.t}</Notice></div>}
-      <Card className="mb-6"><CardHeader><CardTitle>Provider for clip analysis and social text</CardTitle></CardHeader><CardContent>
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+      <div className="space-y-6">
+      <Card><CardHeader><CardTitle>Provider for clip analysis and social text</CardTitle></CardHeader><CardContent>
         <div className="grid gap-3 sm:grid-cols-2">
           {provider("builtin", "Built-in analyzer (free)", "Rule-based scoring on the transcript. No key, no internet.")}
           {provider("gemini", "Google Gemini (your key)", "Better ranking and copy. Uses your own API key.")}
@@ -36,7 +38,7 @@ export default function AISettings() {
         {ai.provider === "gemini" && !ai.gemini.model && <p className="mt-3 text-xs text-warning">Gemini is selected, but analysis falls back to the built-in analyzer until you add a working key and choose a model.</p>}
       </CardContent></Card>
 
-      <Card className="mb-6"><CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-4 w-4" />Google Gemini</CardTitle></CardHeader><CardContent className="space-y-4">
+      <Card><CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-4 w-4" />Google Gemini</CardTitle></CardHeader><CardContent className="space-y-4">
         <div><Label>API key {ai.gemini.has_key && <Badge variant="success" className="ml-2">saved {ai.gemini.key_hint}</Badge>}</Label>
           <div className="flex gap-2"><Input type="password" autoComplete="off" placeholder={ai.gemini.has_key ? "Enter a new key to replace the saved one" : "Paste your Gemini API key"} value={key} onChange={(e) => setKey(e.target.value)} />
             <Button disabled={!key || !!busy} onClick={() => run("save", async () => { setS(await api("/settings/ai/gemini-key", { method: "PUT", body: { key } })); setKey(""); setMsg({ k: "ok", t: "Key saved on this computer." }); })}>Save</Button></div>
@@ -54,7 +56,9 @@ export default function AISettings() {
         <Notice kind="info"><b>About quotas:</b> Google offers a free tier for Gemini, but it is rate-limited and the limits differ per model and can change. Heavy use may hit them (Frameflow then tells you and falls back to the built-in analyzer). Check the current limits at ai.google.dev. Using the API is never required.</Notice>
       </CardContent></Card>
 
-      <Card className="mb-6"><CardHeader><CardTitle>Local model (Ollama)</CardTitle></CardHeader><CardContent className="space-y-3">
+      </div>
+      <div className="space-y-6">
+      <Card><CardHeader><CardTitle>Local model (Ollama)</CardTitle></CardHeader><CardContent className="space-y-3">
         <div><Label>Server address</Label><Input value={ai.local.host} onChange={(e) => setS({ ...s, ai: { ...ai, local: { ...ai.local, host: e.target.value } } })} onBlur={() => put({ ai: { local: { host: ai.local.host } } })} /></div>
         <Button variant="secondary" disabled={!!busy} onClick={() => run("l", async () => { const r = await api<any>("/settings/ai/test", { body: { provider: "local" } }); setLModels(r.models); setMsg({ k: "ok", t: r.message }); })}>Find installed models</Button>
         <Select value={ai.local.model} onChange={(e) => put({ ai: { local: { model: e.target.value } } })}><option value="">{lmodels.length ? "Choose a model…" : ai.local.model || "Click “Find installed models”"}</option>{lmodels.map((m) => <option key={m.id} value={m.id}>{m.id} ({m.description})</option>)}</Select>
@@ -69,6 +73,8 @@ export default function AISettings() {
         </div>
         <p className="text-xs text-muted-foreground">The model is downloaded once from Hugging Face on first use, then everything runs offline. For Hindi, “small” or larger is strongly recommended.</p>
       </CardContent></Card>
+      </div>
+      </div>
     </div>
   );
 }

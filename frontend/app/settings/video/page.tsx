@@ -12,9 +12,10 @@ export default function VideoSettings() {
   const save = async () => { try { await api("/settings", { method: "PUT", body: { video: v } }); setSaved(true); setTimeout(() => setSaved(false), 2000); } catch (e: any) { setErr(e.message); } };
   const en = v.enhance, ex = v.export;
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <PageHeader title="Video Settings" subtitle="Defaults for newly created clips. Existing clips keep their own settings." actions={<Button onClick={save}>{saved ? <><Check className="h-4 w-4" />Saved</> : "Save defaults"}</Button>} />
       {err && <div className="mb-4"><Notice kind="error">{err}</Notice></div>}
+      <div className="grid items-start gap-6 lg:grid-cols-2">
       <div className="space-y-6">
         <Card><CardHeader><CardTitle>Format and framing</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-3">
           <div><Label>Aspect ratio</Label><Select value={v.format} onChange={(e) => upd({ format: e.target.value })}><option value="9:16">9:16 – Reels / Shorts</option><option value="1:1">1:1 – Square</option><option value="16:9">16:9 – Landscape</option><option value="4:5">4:5 – Instagram feed</option></Select></div>
@@ -30,6 +31,8 @@ export default function VideoSettings() {
           </div>
           <p className="text-xs text-muted-foreground">Frameflow never invents detail: if the source has fewer pixels or frames than requested, the export says so (1440p / 4K / 60 fps need a source that really has them).</p>
         </CardContent></Card>
+      </div>
+      <div className="space-y-6">
         <Card><CardHeader><CardTitle>Enhancements</CardTitle></CardHeader><CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Slider label="Brightness" value={en.brightness} min={-0.3} max={0.3} step={0.01} onChange={(x) => upd({ enhance: { brightness: x } })} />
@@ -46,6 +49,7 @@ export default function VideoSettings() {
           </div>
           <p className="text-xs text-muted-foreground">Music and sound effects are never added automatically; choose your own files per clip.</p>
         </CardContent></Card>
+      </div>
       </div>
     </div>
   );

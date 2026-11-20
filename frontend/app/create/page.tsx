@@ -20,8 +20,10 @@ export default function Create() {
   const [rs, setRs] = useState(""); const [re, setRe] = useState("");
   const common: Common = { dur, lang, maxClips, mode: goal, partLen, rangeStart: parseTime(rs) ?? 0, rangeEnd: parseTime(re) ?? 0 };
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <PageHeader title="Create New Clips" subtitle="Provide a video you own or have permission to use. Frameflow analyzes the speech, finds the best moments and prepares clips with captions." />
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div>
       <Tabs<Mode> value={mode} onChange={setMode} tabs={[
         { id: "upload", label: "Upload video", icon: <Upload className="h-3.5 w-3.5" /> },
         { id: "youtube", label: "YouTube URL", icon: <Youtube className="h-3.5 w-3.5" /> },
@@ -62,7 +64,18 @@ export default function Create() {
         {mode === "youtube" && <YouTubePane {...common} />}
         {mode === "live" && <LivePane {...common} />}
       </CardContent></Card>
-      <p className="mt-4 text-xs text-muted-foreground">Only process videos you own or have permission to use. Frameflow never bypasses logins, DRM or platform restrictions.</p>
+      </div>
+      <aside className="space-y-4 xl:sticky xl:top-6">
+        <Card><CardHeader><CardTitle>How it works</CardTitle></CardHeader><CardContent>
+          <ol className="space-y-3 text-sm">
+            {[["Add a video", "Upload a file, paste a YouTube link, or record an authorized live stream."], ["Frameflow listens", "It transcribes the speech locally with word-level timing. Nothing leaves your computer."], ["Pick your clips", "Best moments, or the whole story as Part 1, Part 2… Edit captions, framing and hooks."], ["Export", "Watermark-free MP4s, subtitles and one tidy bundle to download."]].map(([t, d], i) => (
+              <li key={t} className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-cyan text-xs font-semibold text-white shadow-[0_0_12px_hsl(var(--primary)/.5)]">{i + 1}</span><div><div className="font-medium">{t}</div><div className="text-xs text-muted-foreground">{d}</div></div></li>
+            ))}
+          </ol>
+        </CardContent></Card>
+        <p className="px-1 text-xs text-muted-foreground">Only process videos you own or have permission to use. Frameflow never bypasses logins, DRM or platform restrictions.</p>
+      </aside>
+      </div>
     </div>
   );
 }
