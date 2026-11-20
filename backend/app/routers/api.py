@@ -753,7 +753,7 @@ def srt(cid: str):
     d = pipeline.paths(c["project_id"])["work"]
     d.mkdir(exist_ok=True)
     f = d / f"{cid}.srt"
-    f.write_text(captions.build_srt(rel), encoding="utf-8")
+    f.write_text(captions.build_srt(captions.filter_hidden(rel, (pipeline.clip_settings(c).get("caption") or {}).get("hidden"))), encoding="utf-8")
     return FileResponse(f, filename=f"{re.sub(r'[^A-Za-z0-9]+', '-', c['title'])[:40] or 'clip'}.srt", media_type="application/x-subrip")
 
 

@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Captions, Crop, Download, Image as ImageIcon, Megaphone, Scissors, Type, Wand2, Upload, Loader2 } from "lucide-react";
+import { Captions, Crop, Download, Image as ImageIcon, Megaphone, Scissors, Trash2, Type, Wand2, Upload, Loader2 } from "lucide-react";
 import { api, Clip, ClipSettings, FontInfo, Project, upload, url, useJob, Word } from "@/lib/api";
 import { Badge, Button, Card, Input, JobBar, Label, Notice, Select, Slider, Switch, Tabs, scoreColor } from "@/components/ui";
 import { ClipPreview, Framing } from "@/components/clip-preview";
@@ -93,6 +93,7 @@ export function ClipEditor({ project, clip, fonts, patch, refresh }: { project: 
               <div><h4 className="mb-2 text-sm font-semibold">Style preset</h4><PresetGallery value={st.caption.preset} onPick={(p) => set({ caption: { ...p.style, preset: p.id, show: st.caption.show } })} /></div>
               <div><h4 className="mb-2 text-sm font-semibold">Customize</h4><CaptionControls style={st.caption} fonts={fonts} onChange={(c) => set({ caption: { ...c, preset: st.caption.preset === "custom" ? "custom" : st.caption.preset } })} /></div>
               </div>
+              <HiddenRanges clip={clip} playhead={playhead} set={set} />
               <div><h4 className="mb-2 text-sm font-semibold">Fix words and timing</h4><WordEditor projectId={project.id} words={words} onSaved={loadWords} onSeek={(t) => setSeek((s) => ({ t: t - clip.start, n: s.n + 1 }))} /></div>
               {project.analysis?.word_timing === "estimated" && <Notice kind="warn">Word timing came from YouTube captions and is estimated. Attach your video to transcribe it precisely.</Notice>}
             </div>
@@ -233,6 +234,45 @@ function HookTab({ clip, set }: { clip: Clip; set: (p: any) => void }) {
         <Slider label="Visible for" value={e.duration} min={1} max={4} step={0.1} suffix=" s" onChange={(v) => set({ ending: { duration: v } })} />
       </div>
       <Notice kind="info">Hook and ending text is an overlay only. ClipForge never reorders, cuts or alters what the speaker says, so edits cannot change their meaning. Keep hooks truthful to the clip.</Notice>
+    </div>
+  );
+}
+
+
+function HiddenRanges({ clip, playhead, set }: { clip: Clip; playhead: number; set: (p: any) => void }) {
+  const dur = clip.end - clip.start;
+  const ranges = clip.settings.caption.hidden ?? [];
+  const save = (r: { start: number; end: number }[]) => set({ caption: { hidden: r.map((x) => ({ start: Math.max(0, Math.min(dur, +x.start.toFixed(2))), end: Math.max(0, Math.min(dur, +x.end.toFixed(2))) })) } });
+  const upd = (i: number, p: Partial<{ start: number; end: number }>) => save(ranges.map((r, k) => (k === i ? { ...r, ...p } : r)));
+  return (
+    <div className="space-y-3 rounded-md border p-3">
+      <div><h4 className="text-sm font-semibold">Hide captions for part of the clip</h4>
+        <p className="mt-1 text-xs text-muted-foreground">Heard a wrong caption? Pause the preview there and hide captions for that stretch (0:00 = start of this clip). Hidden parts also drop out of the exported SRT.</p></div>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" onClick={() => save([...ranges, { start: playhead, end: Math.min(dur, playhead + 3) }])}>Hide 3 s from playhead</Button>
+        <Button size="sm" variant="secondary" onClick={() => save([...ranges, { start: playhead, end: dur }])}>Hide from playhead to the end</Button>
+        <Button size="sm" variant="secondary" onClick={() => save([...ranges, { start: 0, end: playhead }])}>Hide from the start to playhead</Button>
+        {ranges.length > 0 && <Button size="sm" variant="ghost" onClick={() => save([])}>Show all captions again</Button>}
+      </div>
+      {ranges.length > 0 && (
+        <>
+          <div className="relative h-3 overflow-hidden rounded-full bg-muted" title="Red = captions hidden">
+            {ranges.map((r, i) => <div key={i} className="absolute top-0 h-full bg-danger/70" style={{ left: `${(r.start / dur) * 100}%`, width: `${Math.max(0.5, ((r.end - r.start) / dur) * 100)}%` }} />)}
+            <div className="absolute top-0 h-full w-0.5 bg-foreground" style={{ left: `${Math.min(100, (playhead / dur) * 100)}%` }} />
+          </div>
+          <ul className="space-y-2">
+            {ranges.map((r, i) => (
+              <li key={i} className="flex flex-wrap items-end gap-2">
+                <TimeField label="Hide from" value={r.start} onCommit={(v) => upd(i, { start: v })} />
+                <TimeField label="to" value={r.end} onCommit={(v) => upd(i, { end: v })} />
+                <Button size="sm" variant="outline" onClick={() => upd(i, { start: playhead })}>Start = playhead</Button>
+                <Button size="sm" variant="outline" onClick={() => upd(i, { end: playhead })}>End = playhead</Button>
+                <Button size="icon" variant="ghost" title="Remove" onClick={() => save(ranges.filter((_, k) => k !== i))}><Trash2 className="h-3.5 w-3.5" /></Button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

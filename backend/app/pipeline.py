@@ -290,7 +290,7 @@ def render_job(clip_id: str, settings_override: Optional[dict] = None):
                 f.unlink(missing_ok=True)
         srt = out.with_suffix(".srt")
         from .services import captions
-        srt.write_text(captions.build_srt(rel_words), encoding="utf-8")
+        srt.write_text(captions.build_srt(captions.filter_hidden(rel_words, (st.get("caption") or {}).get("hidden"))), encoding="utf-8")
         entry = {"file": out.name, "srt": srt.name, "at": time.time(), **info}
         fresh = db.one("SELECT exports FROM clips WHERE id=?", (clip_id,))
         db.update("clips", clip_id, exports=(fresh["exports"] or []) + [entry], settings=st)

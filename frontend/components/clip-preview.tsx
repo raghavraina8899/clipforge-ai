@@ -139,7 +139,9 @@ export function ClipPreview({ src, srcW, srcH, start, end, settings, words, fram
   const stacked = !!framing?.facecam && (settings.layout === "smart" || settings.layout === "facecam");
   const st = (stacked ? { ...settings.caption, position: facecamCaptionPos(Math.round(540 / ar * Math.min(0.6, Math.max(0.25, settings.facecam?.share ?? 0.4))), canvasH, settings.facecam?.caption ?? "face") } : settings.caption) as any;
   const k = (Math.min(boxW, boxW / ar)) / 1080 * (ar >= 1 ? ar : 1);
-  const shown = (settings.caption as any).show === false ? null : captionAt(words.map((w) => ({ ...w, s: w.s - start, e: w.e - start })), t, st);
+  const hiddenRanges = (settings.caption as any).hidden as { start: number; end: number }[] | undefined;
+  const visibleWords = words.map((w) => ({ ...w, s: w.s - start, e: w.e - start })).filter((w) => !(hiddenRanges || []).some((r) => r.start <= (w.s + w.e) / 2 && (w.s + w.e) / 2 <= r.end));
+  const shown = (settings.caption as any).show === false ? null : captionAt(visibleWords, t, st);
   const fs = (st.size || 66) * Math.min(boxW, boxW / ar) / 1080;
   const kk = fs / (st.size || 66);
   const hookOn = settings.hook.enabled && settings.hook.text && t < settings.hook.duration;

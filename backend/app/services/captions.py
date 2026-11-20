@@ -210,6 +210,14 @@ def build_ass(words: list, style: Optional[dict], W: int, H: int, duration: floa
     return "\n".join(lines + ev) + "\n", overlays
 
 
+def filter_hidden(words: list, ranges: Optional[list]) -> list:
+    """Drop words whose midpoint falls inside a user-chosen 'no captions here' range (clip-relative seconds)."""
+    rs = [(float(r["start"]), float(r["end"])) for r in (ranges or []) if isinstance(r, dict) and "start" in r and "end" in r]
+    if not rs:
+        return words
+    return [w for w in words if not any(a <= (w["s"] + w["e"]) / 2 <= b for a, b in rs)]
+
+
 def build_srt(words: list, per: int = 7) -> str:
     out = []
     for i, g in enumerate(_group(words, per), 1):

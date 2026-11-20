@@ -256,6 +256,7 @@ def render_clip(src_path: Path, src: dict, proxy: Optional[Path], clip: dict, se
         post.append(f"fade=t=out:st={max(0, dur - fo):.2f}:d={fo:.2f}")
 
     rel_words = [{"w": w["w"], "s": w["s"] - start, "e": w["e"] - start} for w in words if w["e"] > start and w["s"] < end]
+    rel_words = captions.filter_hidden(rel_words, (st.get("caption") or {}).get("hidden"))
     ass, overlays = captions.build_ass(rel_words, st.get("caption"), W, H, dur, st.get("hook"), st.get("ending"))
     (work / "captions.ass").write_text(ass, encoding="utf-8")
     fonts_link = work / "fonts"
