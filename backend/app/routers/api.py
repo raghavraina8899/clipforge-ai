@@ -382,6 +382,12 @@ def add_youtube(b: YT):
         err(400, str(e))
     prefs = {k: v for k, v in (("min_dur", b.min_dur), ("max_dur", b.max_dur), ("part_len", b.part_len), ("range_start", b.range_start),
                                 ("range_end", b.range_end)) if v}
+    lr_s, lr_e = sources.youtube_range(b.url)  # time range carried by the link itself (?t=, start=, end=)
+    if (lr_s or lr_e) and not (b.range_start or b.range_end):
+        if lr_s:
+            prefs["range_start"] = lr_s
+        if lr_e:
+            prefs["range_end"] = lr_e
     if b.mode == "series":
         prefs["mode"] = "series"
     pid = new_project(info["title"] or f"YouTube {info['video_id']}", "youtube", source_url=b.url, status="processing",

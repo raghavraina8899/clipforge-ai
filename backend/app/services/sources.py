@@ -22,6 +22,26 @@ def youtube_id(url: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def _secs(v: str) -> float:
+    """'7200', '7200s', '1h2m3s' -> seconds."""
+    v = v.strip().lower()
+    if re.fullmatch(r"\d+(\.\d+)?s?", v):
+        return float(v.rstrip("s"))
+    m = re.fullmatch(r"(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?", v)
+    return (int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60 + int(m.group(3) or 0)) if m and v else 0.0
+
+
+def youtube_range(url: str) -> tuple:
+    """Start/end seconds carried by a YouTube link: share links use ?t=, embed-style links use start= and end=."""
+    from urllib.parse import parse_qs, urlparse
+    u = urlparse(url.strip())
+    q = {k: v[0] for k, v in parse_qs(u.query).items() if v}
+    frag = {k: v[0] for k, v in parse_qs(u.fragment).items() if v}
+    start = _secs(q.get("start") or q.get("t") or frag.get("t") or "0")
+    end = _secs(q.get("end") or "0")
+    return (start, end) if not end or end > start else (start, 0.0)
+
+
 def youtube_info(url: str) -> dict:
     vid = youtube_id(url)
     if not vid:

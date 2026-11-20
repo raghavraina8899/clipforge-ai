@@ -51,7 +51,7 @@ if [ "${CLIPFORGE_DEV:-0}" = "1" ]; then FRONT="npm run dev"; else
 fi
 cd ..
 
-for port in 8000 3000; do lsof -ti tcp:$port >/dev/null 2>&1 && die "Port $port is already in use. Stop the other program (or an earlier ClipForge) first."; done
+for port in 8000 3000; do lsof -ti tcp:$port -sTCP:LISTEN >/dev/null 2>&1 && die "Port $port is already in use. Stop the other program (or an earlier ClipForge) first."; done
 
 pids=()
 cleanup() { say "Stopping…"; for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done; wait 2>/dev/null || true; }

@@ -5,7 +5,7 @@ import { Youtube, Upload, Radio, FileVideo, Pause, Play, Square, Circle, X } fro
 import { api, upload, ApiError } from "@/lib/api";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Notice, PageHeader, Progress, Select, Tabs } from "@/components/ui";
 import { DurationPicker, defaultDuration, DurationValue } from "@/components/duration-picker";
-import { fmtBytes, fmtTime, parseTime } from "@/lib/utils";
+import { fmtBytes, fmtTime, parseTime, ytLinkRange } from "@/lib/utils";
 
 type Mode = "youtube" | "upload" | "live";
 const YT = /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/|embed\/|v\/))([A-Za-z0-9_-]{11})/;
@@ -144,6 +144,8 @@ function YouTubePane(c: Common) {
     <div className="space-y-4">
       <div><Label>YouTube video URL</Label><Input placeholder="https://www.youtube.com/watch?v=…" value={u} onChange={(e) => setU(e.target.value)} />
         {u && !valid && <p className="mt-1 text-xs text-warning">This does not look like a YouTube video link.</p>}</div>
+      {valid && (() => { const r = ytLinkRange(u); const mine = c.rangeStart || c.rangeEnd; if ((!r.start && !r.end) || mine) return null; return (
+        <Notice kind={r.end ? "ok" : "warn"}>Time range found in the link: from <b>{fmtTime(r.start)}</b> {r.end ? <>to <b>{fmtTime(r.end)}</b>. Only that part is downloaded and transcribed.</> : <>to the <b>end of the video</b>. A link start alone does not shorten the work after that point: fill in “Stop” above, or add <code>&amp;end=SECONDS</code> to the link.</>}</Notice>); })()}
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={ok} onChange={(e) => setOk(e.target.checked)} />I own this video or have permission to use it. ClipForge may download it temporarily to create clips.</label>
       {ok && (
         <div className="space-y-2 rounded-md border p-3">

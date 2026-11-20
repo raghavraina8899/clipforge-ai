@@ -33,3 +33,21 @@ export function deepMerge<T>(a: T, b: any): T {
   for (const k of Object.keys(b)) out[k] = typeof b[k] === "object" && b[k] !== null && !Array.isArray(b[k]) ? deepMerge(out[k] ?? {}, b[k]) : b[k];
   return out;
 }
+
+
+/** Start/end seconds carried by a YouTube link (?t=, start=, end=), like the backend. */
+export function ytLinkRange(link: string): { start: number; end: number } {
+  try {
+    const u = new URL(link.trim());
+    const secs = (v: string | null) => {
+      if (!v) return 0; v = v.toLowerCase();
+      if (/^\d+(\.\d+)?s?$/.test(v)) return parseFloat(v);
+      const m = v.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+      return m ? (+(m[1] || 0)) * 3600 + (+(m[2] || 0)) * 60 + (+(m[3] || 0)) : 0;
+    };
+    const frag = new URLSearchParams(u.hash.replace(/^#/, ""));
+    const start = secs(u.searchParams.get("start") || u.searchParams.get("t") || frag.get("t"));
+    const end = secs(u.searchParams.get("end"));
+    return { start, end: end > start ? end : 0 };
+  } catch { return { start: 0, end: 0 }; }
+}
