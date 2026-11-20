@@ -11,6 +11,35 @@ class DownloadError(RuntimeError):
     pass
 
 
+# YouTube regularly breaks individual clients; try several before giving up.
+CLIENT_SETS = [None, ["tv"], ["mweb"], ["web_safari"], ["ios"]]
+
+
+def _download(opts: dict, url: str) -> None:
+    import time
+    import yt_dlp
+    last: Optional[Exception] = None
+    for i, clients in enumerate(CLIENT_SETS):
+        o = dict(opts)
+        o["extractor_retries"] = 3
+        if clients:
+            o["extractor_args"] = {"youtube": {"player_client": clients}}
+        try:
+            with yt_dlp.YoutubeDL(o) as ydl:
+                ydl.download([url])
+            return
+        except DownloadError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            last = e
+            msg = str(e).lower()
+            if any(k in msg for k in ("private video", "removed", "does not exist", "copyright", "members-only", "live event")):
+                break  # retrying with another client cannot fix these
+            log.warning("yt-dlp attempt %d (%s) failed: %s", i + 1, clients or "default", str(e)[:200])
+            time.sleep(1.5)
+    raise DownloadError(_friendly(str(last)))
+
+
 def _friendly(msg: str) -> str:
     m = msg.lower()
     if "sign in" in m or "age" in m and "restrict" in m or "login" in m:
@@ -21,6 +50,8 @@ def _friendly(msg: str) -> str:
         return "This video is unavailable (removed, region-locked or blocked)."
     if "live" in m and ("is live" in m or "live event" in m):
         return "This is a live broadcast. Use the live-stream recorder instead, or wait for the replay."
+    if "needs to be reloaded" in m:
+        return "YouTube refused the request ('page needs to be reloaded'). ClipForge retried with other clients; update yt-dlp (pip install -U yt-dlp) or try again later."
     if "javascript" in m or "js runtime" in m or "n challenge" in m:
         return "YouTube extraction needs a JavaScript runtime (install Node.js or Deno) and an up-to-date yt-dlp."
     if "http error 429" in m or "too many requests" in m:
@@ -53,13 +84,7 @@ def download_segment(url: str, start: float, end: float, out_dir: Path, name: st
         "quiet": True, "no_warnings": True, "noprogress": True, "progress_hooks": [hook], "retries": 3, "socket_timeout": 30,
         "overwrites": True,
     }
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            ydl.download([url])
-    except DownloadError:
-        raise
-    except Exception as e:  # noqa: BLE001 - yt-dlp raises many types; message is user-facing
-        raise DownloadError(_friendly(str(e)))
+    _download(opts, url)
     files = sorted(out_dir.glob(f"{name}.*"))
     files = [f for f in files if f.suffix in (".mp4", ".mkv", ".webm")]
     if not files:
@@ -85,13 +110,7 @@ def download_audio(url: str, out_dir: Path, on_progress: Optional[Callable[[floa
 
     opts = {"format": "ba/b", "outtmpl": str(out_dir / "audio_src.%(ext)s"), "noplaylist": True, "quiet": True, "no_warnings": True,
             "noprogress": True, "progress_hooks": [hook], "retries": 3, "socket_timeout": 30}
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            ydl.download([url])
-    except DownloadError:
-        raise
-    except Exception as e:  # noqa: BLE001
-        raise DownloadError(_friendly(str(e)))
+    _download(opts, url)
     files = list(out_dir.glob("audio_src.*"))
     if not files:
         raise DownloadError("The audio download produced no file.")

@@ -5,7 +5,10 @@ cd "$(dirname "$0")"
 say() { printf "\033[1;35m[clipforge]\033[0m %s\n" "$*"; }
 die() { printf "\033[1;31m[clipforge] %s\033[0m\n" "$*" >&2; exit 1; }
 
-command -v python3 >/dev/null || die "Python 3.9+ is required."
+# prefer a recent Python: current yt-dlp (YouTube downloads) needs 3.10+
+PY=""
+for c in python3.13 python3.12 python3.11 python3.10 python3; do command -v "$c" >/dev/null 2>&1 && { PY="$c"; break; }; done
+[ -n "$PY" ] || die "Python 3.9+ is required (3.12 recommended: brew install python@3.12)."
 command -v node >/dev/null && command -v npm >/dev/null || die "Node.js 18+ is required (https://nodejs.org)."
 if ! command -v ffmpeg >/dev/null; then
   die "FFmpeg is missing. Install it with a build that includes libass (captions), e.g.:  brew install ffmpeg-full   (macOS)  |  sudo apt install ffmpeg  (Linux)"
@@ -14,7 +17,12 @@ FILTERS=$(ffmpeg -hide_banner -filters 2>/dev/null || true)
 grep -qE "[[:space:]]subtitles[[:space:]]" <<<"$FILTERS" || die "Your FFmpeg has no 'subtitles' filter (libass). On macOS: brew uninstall ffmpeg && brew install ffmpeg-full"
 
 # ---- backend
-if [ ! -x backend/.venv/bin/python ]; then say "Creating Python environment…"; python3 -m venv backend/.venv; fi
+want_minor=$("$PY" -c 'import sys;print(sys.version_info[1])')
+if [ -x backend/.venv/bin/python ]; then
+  have_minor=$(backend/.venv/bin/python -c 'import sys;print(sys.version_info[1])')
+  if [ "$have_minor" -lt 10 ] && [ "$want_minor" -ge 10 ]; then say "Upgrading the Python environment to $($PY --version)…"; rm -rf backend/.venv; fi
+fi
+if [ ! -x backend/.venv/bin/python ]; then say "Creating Python environment ($($PY --version))…"; "$PY" -m venv backend/.venv; fi
 REQ_HASH=$(shasum backend/requirements.txt | cut -d' ' -f1)
 if [ ! -f backend/.venv/.req_hash ] || [ "$(cat backend/.venv/.req_hash)" != "$REQ_HASH" ]; then
   say "Installing backend dependencies (first run takes a few minutes)…"
