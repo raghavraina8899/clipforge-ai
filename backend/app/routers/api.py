@@ -579,6 +579,29 @@ def retry_project(pid: str):
     return {"job_id": jobs.submit("ingest", pipeline.ingest_job(pid), project_id=pid)}
 
 
+@router.post("/projects/{pid}/romanize")
+def romanize_project(pid: str):
+    """Convert an existing Devanagari transcript (and clip titles/hooks) to Hinglish, no re-transcription needed."""
+    from ..services import hinglish
+    get_project(pid)
+    tr = pipeline.load_transcript(pid)
+    if not tr:
+        err(404, "No transcript yet.")
+    with pipeline._tr_lock:
+        n = hinglish.romanize_words(tr["words"])
+        for sg in tr.get("segments", []):
+            sg["text"] = hinglish.romanize(sg["text"])
+        pipeline.paths(pid)["transcript"].write_text(json.dumps(tr, ensure_ascii=False))
+    for c in db.many("SELECT id, title, hook, caption, reason FROM clips WHERE project_id=?", (pid,)):
+        db.update("clips", c["id"], title=hinglish.romanize(c["title"] or ""), hook=hinglish.romanize(c["hook"] or ""),
+                  caption=hinglish.romanize(c["caption"] or ""), reason=hinglish.romanize(c["reason"] or ""))
+    p = get_project(pid)
+    an = dict(p.get("analysis") or {})
+    an["summary"] = hinglish.romanize(an.get("summary") or "")
+    db.update("projects", pid, analysis={**an, "devanagari": False}, prefs={**(p.get("prefs") or {}), "language": "hinglish"})
+    return {"converted_words": n}
+
+
 @router.post("/projects/{pid}/download-full")
 def download_full_video(pid: str, body: Optional[dict] = None):
     """Fetch the whole video once for a YouTube project the user has authorized, then process it like an upload."""

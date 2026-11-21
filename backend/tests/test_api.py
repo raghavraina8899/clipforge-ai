@@ -183,3 +183,26 @@ def test_waveform_endpoint(client, test_video):
     assert client.get("/api/clips/cw/waveform?start=500&end=520").status_code == 400                                          # outside the video
     assert client.get("/api/clips/cw/waveform?start=-5&end=3&bins=50").json()["start"] == 0                                    # clamped to the video
     client.delete("/api/projects/pw")
+
+
+def test_convert_captions_to_hinglish(client):
+    import json
+    add_project("ph", language="hi")
+    add_clip("ch", "ph")
+    db.update("clips", "ch", title="आपको क्या चाहिए", hook="बहुत अच्छा", reason="x")
+    db.update("projects", "ph", analysis={"summary": "Frequent topics: मतलब, भाई", "devanagari": True, "clips": 1})
+    words = [{"w": "आपको", "s": 0.0, "e": 0.4}, {"w": "game", "s": 0.4, "e": 0.8}, {"w": "नहीं", "s": 0.8, "e": 1.2}]
+    pipeline.paths("ph")["transcript"].write_text(json.dumps({"language": "hi", "words": words, "segments": [{"start": 0, "end": 1.2, "text": "आपको game नहीं"}]}, ensure_ascii=False))
+    r = client.post("/api/projects/ph/romanize")
+    assert r.status_code == 200 and r.json()["converted_words"] == 2
+    tr = json.loads(pipeline.paths("ph")["transcript"].read_text())
+    assert [w["w"] for w in tr["words"]] == ["aapko", "game", "nahin"] and tr["segments"][0]["text"] == "aapko game nahin"
+    d = client.get("/api/projects/ph").json()
+    assert d["project"]["analysis"]["devanagari"] is False and d["project"]["prefs"]["language"] == "hinglish"
+    assert d["project"]["analysis"]["summary"] == "Frequent topics: matlab, bhai"
+    assert d["clips"][0]["title"] == "aapko kya chahiye" and d["clips"][0]["hook"] == "bahut achchha"
+    assert client.post("/api/projects/nope/romanize").status_code == 404
+    add_project("ph2")
+    assert client.post("/api/projects/ph2/romanize").status_code == 404           # no transcript yet: a clear 404, not a crash
+    client.delete("/api/projects/ph")
+    client.delete("/api/projects/ph2")

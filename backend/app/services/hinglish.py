@@ -22,7 +22,10 @@ def _word(dev: str) -> str:
     for a, b in (("j~n", "gy"), ("kSh", "ksh"), ("GY", "gy"), ("Ch", "chh"), ("Sh", "sh"), (".Dh", "rh"), (".D", "r"), ("RRi", "ri"), ("R^i", "ri"),
                  ("~N", "n"), (".N", "n"), (".n", "n"), ("M", "n"), ("H", "h"), ("A", "a"), ("I", "i"), ("U", "u"), ("^", ""), ("L", "l")):
         r = r.replace(a, b)
-    return r.lower()
+    r = r.lower()
+    r = re.sub(r"(?<=[^aeiou])ie$", "iye", r)   # चाहिए chahiye, लिए liye, दीजिए dijiye
+    r = re.sub(r"ae$", "aye", r)                # गए gaye
+    return r
 
 
 def romanize(text: str) -> str:
